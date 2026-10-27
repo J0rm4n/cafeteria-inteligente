@@ -3,11 +3,15 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="Sistema inteligente de pedidos e hiperpersonalización de consumo en cafeterías">
-  <meta name="theme-color" content="#5b3a29">
-  <title>Café Inteligente</title>
+  <meta name="description" content="Optimizando la decisión: sistema inteligente de pedidos y recomendación personalizada para cafeterías basado en el perfil y preferencias del cliente.">
+  <meta name="theme-color" content="#16110e">
+  <meta name="color-scheme" content="dark">
+  <title>Café Inteligente · Optimizando la decisión</title>
   <link rel="icon" href="img/icono.svg" type="image/svg+xml">
   <link rel="manifest" href="manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
@@ -16,19 +20,23 @@
   </div>
 
   <header id="topbar" class="topbar" hidden>
-    <a href="#/menu" class="marca"><img src="img/icono.svg" alt="" width="28" height="28"> <span>Café Inteligente</span></a>
-    <nav class="nav-escritorio" id="nav-escritorio"></nav>
+    <a href="#/menu" class="marca">
+      <img src="img/icono.svg" alt="" width="30" height="30">
+      <span><strong>Café Inteligente</strong><small id="marca-sub">Optimizando la decisión</small></span>
+    </a>
+    <nav class="nav-escritorio" id="nav-escritorio" aria-label="Principal"></nav>
     <button class="btn-link" id="btn-salir" type="button">Salir</button>
   </header>
 
   <main id="app" class="app" aria-live="polite"></main>
 
-  <nav id="nav-movil" class="nav-movil" hidden></nav>
+  <nav id="nav-movil" class="nav-movil" aria-label="Principal" hidden></nav>
 
   <div id="toast" class="toast" role="status" hidden></div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
   <script src="js/config.js"></script>
+  <script src="js/dominio.js"></script>
   <script src="js/datos-demo.js"></script>
   <script src="js/api.js"></script>
   <script src="js/recomendador.js"></script>
