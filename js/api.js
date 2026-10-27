@@ -11,6 +11,12 @@
   const usarSupabase = Boolean(cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY && window.supabase);
   const D = window.dominio;
 
+  // Validación del lado del servidor/capa de datos: nunca se confía solo en el formulario
+  function validarRegistro(email, password, nombre) {
+    const error = D.validarNombre(nombre) || D.validarEmail(email) || D.validarClave(password, { email, nombre });
+    if (error) throw new Error(error);
+  }
+
   /* ------------------------------------------------------------------ */
   /*  Modo Supabase                                                      */
   /* ------------------------------------------------------------------ */
@@ -42,7 +48,10 @@
       if (/Invalid login credentials/i.test(m)) return "Correo o contraseña incorrectos.";
       if (/already registered/i.test(m)) return "Ese correo ya está registrado.";
       if (/Email not confirmed/i.test(m)) return "Debes confirmar tu correo antes de iniciar sesión.";
-      if (/Password should be at least/i.test(m)) return "La contraseña debe tener al menos 6 caracteres.";
+      if (/Password should be at least/i.test(m)) return "La contraseña es demasiado corta.";
+      if (/Password should contain|weak.?password|pwned|leaked/i.test(m)) return "La contraseña no es segura o aparece en filtraciones conocidas. Elige otra.";
+      if (/rate limit|too many/i.test(m)) return "Demasiados intentos. Espera un momento e inténtalo de nuevo.";
+      if (/invalid.*email|email.*invalid/i.test(m)) return "El correo no es válido.";
       return m;
     };
     const ok = ({ data, error }) => { if (error) throw new Error(traducirError(error)); return data; };
@@ -61,6 +70,7 @@
         return { user: { id: user.id, email: user.email }, perfil: await perfil(user) };
       },
       async registrar(email, password, nombre) {
+        validarRegistro(email, password, nombre);
         const data = ok(await db.auth.signUp({ email, password, options: { data: { nombre } } }));
         if (!data.session) throw new Error("Cuenta creada. Revisa tu correo para confirmarla y luego inicia sesión.");
         return this.sesion();
@@ -116,16 +126,16 @@
   /*  Modo demo (localStorage)                                           */
   /* ------------------------------------------------------------------ */
   function DemoAPI() {
-    const K = "cafe_demo_v2";
+    const K = "cafe_demo_v3";
     const leer = () => {
       try { const raw = localStorage.getItem(K); if (raw) return JSON.parse(raw); } catch (e) { /* sin almacenamiento */ }
       return null;
     };
     let estado = leer() || {
       usuarios: [
-        { id: "demo-admin", email: "admin@demo.com", clave: "admin123", nombre: "Administrador",
+        { id: "demo-admin", email: "admin@demo.com", clave: "Barista#2026", nombre: "Administrador",
           restricciones: [], preferencias: [], perfil_completo: true, rol: "admin" },
-        { id: "demo-cliente", email: "cliente@demo.com", clave: "cliente123", nombre: "Cliente Demo",
+        { id: "demo-cliente", email: "cliente@demo.com", clave: "Cliente#2026", nombre: "Cliente Demo",
           restricciones: [], preferencias: ["cafe", "dulce"], perfil_completo: true, rol: "cliente" }
       ],
       productos: window.PRODUCTOS_BASE.map(p => ({ ...p })),
@@ -149,7 +159,7 @@
       async registrar(email, password, nombre) {
         await espera();
         email = email.trim().toLowerCase();
-        if (password.length < 6) throw new Error("La contraseña debe tener al menos 6 caracteres.");
+        validarRegistro(email, password, nombre);   // el "servidor" vuelve a validar
         if (estado.usuarios.some(u => u.email === email)) throw new Error("Ese correo ya está registrado.");
         const u = { id: "u-" + Date.now(), email, clave: password, nombre, restricciones: [], preferencias: [],
                     perfil_completo: false, rol: "cliente" };
