@@ -2,19 +2,21 @@
 //   - SupabaseAPI: base de datos real (PostgreSQL + autenticación de Supabase)
 //   - DemoAPI:     simulación en localStorage (para presentar sin configurar nada)
 //
-// Formato normalizado de un pedido:
-// { id, usuario_id, cliente, canal, estado, total, created_at,
-//   items: [{ producto_id, nombre, cantidad, precio_unitario }] }
+// Perfil:  { id, nombre, restricciones[], preferencias[], perfil_completo, rol }
+// Pedido:  { id, usuario_id, cliente, canal, estado, mood, total, created_at,
+//            items: [{ producto_id, nombre, cantidad, opciones, precio_unitario, recomendado }] }
 
 (function () {
   const cfg = window.APP_CONFIG || {};
   const usarSupabase = Boolean(cfg.SUPABASE_URL && cfg.SUPABASE_ANON_KEY && window.supabase);
+  const D = window.dominio;
 
   /* ------------------------------------------------------------------ */
   /*  Modo Supabase                                                      */
   /* ------------------------------------------------------------------ */
   function SupabaseAPI() {
     const db = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+    const ITEMS = "pedido_items(producto_id, cantidad, opciones, precio_unitario, recomendado, productos(nombre))";
 
     const normalizar = (p) => ({
       id: p.id,
@@ -22,13 +24,16 @@
       cliente: p.profiles ? p.profiles.nombre : "",
       canal: p.canal,
       estado: p.estado,
+      mood: p.mood,
       total: p.total,
       created_at: p.created_at,
       items: (p.pedido_items || []).map(it => ({
         producto_id: it.producto_id,
         nombre: it.productos ? it.productos.nombre : "Producto " + it.producto_id,
         cantidad: it.cantidad,
-        precio_unitario: it.precio_unitario
+        opciones: it.opciones,
+        precio_unitario: it.precio_unitario,
+        recomendado: it.recomendado
       }))
     });
 
@@ -44,7 +49,7 @@
 
     async function perfil(user) {
       const data = ok(await db.from("profiles").select("*").eq("id", user.id).maybeSingle());
-      return data || { id: user.id, nombre: user.email, restricciones: [], rol: "cliente" };
+      return data || { id: user.id, nombre: user.email, restricciones: [], preferencias: [], perfil_completo: false, rol: "cliente" };
     }
 
     return {
@@ -57,9 +62,7 @@
       },
       async registrar(email, password, nombre) {
         const data = ok(await db.auth.signUp({ email, password, options: { data: { nombre } } }));
-        if (!data.session) {
-          throw new Error("Cuenta creada. Revisa tu correo para confirmarla y luego inicia sesión.");
-        }
+        if (!data.session) throw new Error("Cuenta creada. Revisa tu correo para confirmarla y luego inicia sesión.");
         return this.sesion();
       },
       async ingresar(email, password) {
@@ -70,25 +73,30 @@
       async actualizarPerfil(id, cambios) {
         ok(await db.from("profiles").update(cambios).eq("id", id));
       },
+      // El filtro de intolerancias se aplica en la base de datos (función menu_para_mi)
       async productos() {
-        return ok(await db.from("productos").select("*").eq("disponible", true).order("id"));
+        return ok(await db.rpc("menu_para_mi"));
       },
-      async crearPedido(items, canal) {
-        const p_items = items.map(i => ({ producto_id: i.producto_id, cantidad: i.cantidad }));
-        return ok(await db.rpc("crear_pedido", { p_items, p_canal: canal }));
+      async productosAdmin() {
+        return ok(await db.from("productos").select("*").order("id"));
+      },
+      async guardarProducto(p) {
+        const { id, ...datos } = p;
+        if (id) ok(await db.from("productos").update(datos).eq("id", id));
+        else ok(await db.from("productos").insert(datos));
+      },
+      async crearPedido(lineas, canal, mood) {
+        const p_items = lineas.map(l => ({ producto_id: l.producto_id, cantidad: l.cantidad, opciones: l.opciones, recomendado: Boolean(l.recomendado) }));
+        return ok(await db.rpc("crear_pedido", { p_items, p_canal: canal, p_mood: mood || null }));
       },
       async misPedidos(usuarioId) {
-        const data = ok(await db.from("pedidos")
-          .select("*, pedido_items(producto_id, cantidad, precio_unitario, productos(nombre))")
-          .eq("usuario_id", usuarioId)
-          .order("created_at", { ascending: false }));
+        const data = ok(await db.from("pedidos").select("*, " + ITEMS)
+          .eq("usuario_id", usuarioId).order("created_at", { ascending: false }));
         return data.map(normalizar);
       },
       async todosLosPedidos() {
-        const data = ok(await db.from("pedidos")
-          .select("*, profiles(nombre), pedido_items(producto_id, cantidad, precio_unitario, productos(nombre))")
-          .order("created_at", { ascending: false })
-          .limit(200));
+        const data = ok(await db.from("pedidos").select("*, profiles(nombre), " + ITEMS)
+          .order("created_at", { ascending: false }).limit(300));
         return data.map(normalizar);
       },
       async cambiarEstado(id, estado) {
@@ -108,39 +116,43 @@
   /*  Modo demo (localStorage)                                           */
   /* ------------------------------------------------------------------ */
   function DemoAPI() {
-    const K = "cafe_demo_v1";
+    const K = "cafe_demo_v2";
     const leer = () => {
-      try {
-        const raw = localStorage.getItem(K);
-        if (raw) return JSON.parse(raw);
-      } catch (e) { /* almacenamiento no disponible */ }
+      try { const raw = localStorage.getItem(K); if (raw) return JSON.parse(raw); } catch (e) { /* sin almacenamiento */ }
       return null;
     };
     let estado = leer() || {
       usuarios: [
-        { id: "demo-admin", email: "admin@demo.com", clave: "admin123", nombre: "Administrador", restricciones: [], rol: "admin" },
-        { id: "demo-cliente", email: "cliente@demo.com", clave: "cliente123", nombre: "Cliente Demo", restricciones: [], rol: "cliente" }
+        { id: "demo-admin", email: "admin@demo.com", clave: "admin123", nombre: "Administrador",
+          restricciones: [], preferencias: [], perfil_completo: true, rol: "admin" },
+        { id: "demo-cliente", email: "cliente@demo.com", clave: "cliente123", nombre: "Cliente Demo",
+          restricciones: [], preferencias: ["cafe", "dulce"], perfil_completo: true, rol: "cliente" }
       ],
+      productos: window.PRODUCTOS_BASE.map(p => ({ ...p })),
       pedidos: window.generarPedidosDemo(),
       sesion: null
     };
     const guardar = () => { try { localStorage.setItem(K, JSON.stringify(estado)); } catch (e) { /* ignorar */ } };
     guardar();
-    const espera = () => new Promise(r => setTimeout(r, 150));
-    const publico = (u) => ({ user: { id: u.id, email: u.email }, perfil: { id: u.id, nombre: u.nombre, restricciones: u.restricciones, rol: u.rol } });
+    const espera = () => new Promise(r => setTimeout(r, 120));
+    const actual = () => estado.usuarios.find(x => x.id === estado.sesion);
+    const publico = (u) => ({
+      user: { id: u.id, email: u.email },
+      perfil: { id: u.id, nombre: u.nombre, restricciones: u.restricciones, preferencias: u.preferencias,
+                perfil_completo: u.perfil_completo, rol: u.rol }
+    });
+    const copia = (x) => JSON.parse(JSON.stringify(x));
 
     return {
       modo: "demo",
-      async sesion() {
-        const u = estado.usuarios.find(x => x.id === estado.sesion);
-        return u ? publico(u) : null;
-      },
+      async sesion() { const u = actual(); return u ? publico(u) : null; },
       async registrar(email, password, nombre) {
         await espera();
         email = email.trim().toLowerCase();
         if (password.length < 6) throw new Error("La contraseña debe tener al menos 6 caracteres.");
         if (estado.usuarios.some(u => u.email === email)) throw new Error("Ese correo ya está registrado.");
-        const u = { id: "u-" + Date.now(), email, clave: password, nombre, restricciones: [], rol: "cliente" };
+        const u = { id: "u-" + Date.now(), email, clave: password, nombre, restricciones: [], preferencias: [],
+                    perfil_completo: false, rol: "cliente" };
         estado.usuarios.push(u);
         estado.sesion = u.id;
         guardar();
@@ -156,34 +168,48 @@
       },
       async salir() { estado.sesion = null; guardar(); },
       async actualizarPerfil(id, cambios) {
-        const u = estado.usuarios.find(x => x.id === id);
-        Object.assign(u, cambios);
+        Object.assign(estado.usuarios.find(x => x.id === id), cambios);
         guardar();
       },
-      async productos() { return window.PRODUCTOS_BASE.slice(); },
-      async crearPedido(items, canal) {
+      // Igual que menu_para_mi() en SQL: solo productos disponibles y compatibles con el perfil
+      async productos() {
+        const u = actual();
+        return copia(estado.productos.filter(p => p.disponible && D.esCompatible(p, u ? u.restricciones : [])));
+      },
+      async productosAdmin() { return copia(estado.productos); },
+      async guardarProducto(p) {
+        if (p.id) Object.assign(estado.productos.find(x => x.id === p.id), p);
+        else estado.productos.push({ ...p, id: Math.max(...estado.productos.map(x => x.id)) + 1 });
+        guardar();
+      },
+      async crearPedido(lineas, canal, mood) {
         await espera();
-        const u = estado.usuarios.find(x => x.id === estado.sesion);
-        const lineas = items.map(i => {
-          const p = window.PRODUCTOS_BASE.find(x => x.id === i.producto_id);
-          return { producto_id: p.id, nombre: p.nombre, cantidad: i.cantidad, precio_unitario: p.precio };
+        const u = actual();
+        const items = lineas.map(l => {
+          const p = estado.productos.find(x => x.id === l.producto_id);
+          if (!p || !p.disponible) throw new Error("Un producto ya no está disponible.");
+          if (!D.esCompatible(p, u.restricciones)) throw new Error(p.nombre + " no es compatible con tus restricciones.");
+          if (p.stock < l.cantidad) throw new Error("No hay suficiente stock de " + p.nombre + ".");
+          return { producto_id: p.id, nombre: p.nombre, cantidad: l.cantidad, opciones: p.personalizable ? l.opciones : null,
+                   precio_unitario: D.precioUnitario(p, l.opciones), recomendado: Boolean(l.recomendado) };
         });
+        items.forEach(it => { estado.productos.find(x => x.id === it.producto_id).stock -= it.cantidad; });
         const pedido = {
           id: Math.max(0, ...estado.pedidos.map(p => p.id)) + 1,
-          usuario_id: u.id, cliente: u.nombre, canal, estado: "pendiente",
-          total: lineas.reduce((s, l) => s + l.precio_unitario * l.cantidad, 0),
-          created_at: new Date().toISOString(), items: lineas
+          usuario_id: u.id, cliente: u.nombre, canal, mood: mood || null, estado: "pendiente",
+          total: items.reduce((s, l) => s + l.precio_unitario * l.cantidad, 0),
+          created_at: new Date().toISOString(), items
         };
         estado.pedidos.push(pedido);
         guardar();
         return pedido.id;
       },
       async misPedidos(usuarioId) {
-        return estado.pedidos.filter(p => p.usuario_id === usuarioId)
-          .sort((a, b) => b.created_at.localeCompare(a.created_at));
+        return copia(estado.pedidos.filter(p => p.usuario_id === usuarioId)
+          .sort((a, b) => b.created_at.localeCompare(a.created_at)));
       },
       async todosLosPedidos() {
-        return estado.pedidos.slice().sort((a, b) => b.created_at.localeCompare(a.created_at));
+        return copia(estado.pedidos.slice().sort((a, b) => b.created_at.localeCompare(a.created_at)));
       },
       async cambiarEstado(id, nuevo) {
         const p = estado.pedidos.find(x => x.id === id);
@@ -195,13 +221,7 @@
         estado.pedidos.forEach(p => {
           const ids = [...new Set(p.items.map(i => i.producto_id))];
           ids.forEach(id => { popularidad[id] = (popularidad[id] || 0) + 1; });
-          for (let i = 0; i < ids.length; i++) {
-            for (let j = 0; j < ids.length; j++) {
-              if (i === j) continue;
-              const k = ids[i] + "-" + ids[j];
-              pares[k] = (pares[k] || 0) + 1;
-            }
-          }
+          ids.forEach(a => ids.forEach(b => { if (a !== b) pares[a + "-" + b] = (pares[a + "-" + b] || 0) + 1; }));
         });
         const coocurrencias = Object.entries(pares).map(([k, veces]) => {
           const [a, b] = k.split("-").map(Number);
