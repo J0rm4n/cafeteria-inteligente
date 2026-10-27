@@ -1,0 +1,10 @@
+{
+  "name": "Café Inteligente",
+  "short_name": "Café IA",
+  "description": "Sistema inteligente de pedidos e hiperpersonalización de consumo en cafeterías",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f6efe6",
+  "theme_color": "#5b3a29",
+  "icons": [{ "src": "img/icono.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
