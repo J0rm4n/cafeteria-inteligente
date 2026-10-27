@@ -221,23 +221,45 @@
             <button role="tab" class="tab" data-tab="registro" aria-selected="false">Crear cuenta</button>
           </div>
           <form id="form-auth" novalidate>
-            <label class="campo" id="campo-nombre" hidden>Nombre
-              <input name="nombre" autocomplete="name" placeholder="Tu nombre">
-            </label>
-            <label class="campo">Correo electrónico
-              <input name="email" type="email" autocomplete="email" required placeholder="tucorreo@ejemplo.com">
-            </label>
-            <label class="campo">Contraseña
-              <input name="password" type="password" autocomplete="current-password" required minlength="6" placeholder="Mínimo 6 caracteres">
-            </label>
+            <div class="campo" id="campo-nombre" hidden>
+              <label for="f-nombre">Nombre</label>
+              <input id="f-nombre" name="nombre" autocomplete="name" maxlength="60" placeholder="Tu nombre" aria-describedby="e-nombre">
+              <small class="campo-error" id="e-nombre" hidden></small>
+            </div>
+            <div class="campo">
+              <label for="f-email">Correo electrónico</label>
+              <input id="f-email" name="email" type="email" inputmode="email" autocomplete="email" maxlength="254" required placeholder="tucorreo@ejemplo.com" aria-describedby="e-email">
+              <small class="campo-error" id="e-email" hidden></small>
+            </div>
+            <div class="campo">
+              <label for="f-clave">Contraseña</label>
+              <div class="con-boton">
+                <input id="f-clave" name="password" type="password" autocomplete="current-password" maxlength="64" required placeholder="Tu contraseña" aria-describedby="e-clave reglas-clave">
+                <button type="button" class="ver-clave" data-ver="f-clave" aria-label="Mostrar contraseña" aria-pressed="false">👁</button>
+              </div>
+              <small class="campo-error" id="e-clave" hidden></small>
+            </div>
+            <div id="ayuda-clave" hidden>
+              <div class="medidor" aria-hidden="true"><span id="medidor-barra"></span></div>
+              <p class="medidor-texto" id="medidor-texto" aria-live="polite"></p>
+              <ul class="reglas" id="reglas-clave"></ul>
+            </div>
+            <div class="campo" id="campo-confirmar" hidden>
+              <label for="f-confirmar">Confirmar contraseña</label>
+              <div class="con-boton">
+                <input id="f-confirmar" name="confirmar" type="password" autocomplete="new-password" maxlength="64" placeholder="Repite la contraseña" aria-describedby="e-confirmar">
+                <button type="button" class="ver-clave" data-ver="f-confirmar" aria-label="Mostrar contraseña" aria-pressed="false">👁</button>
+              </div>
+              <small class="campo-error" id="e-confirmar" hidden></small>
+            </div>
             <p class="error" id="error-auth" role="alert" hidden></p>
             <button class="btn btn-primario btn-bloque" type="submit" id="btn-auth">Ingresar</button>
           </form>
           ${api.modo === "demo" ? `
           <div class="cuentas-demo">
             <p>Cuentas de prueba:</p>
-            <button class="chip" data-demo="cliente@demo.com|cliente123">Cliente con historial</button>
-            ${S.kiosco ? "" : `<button class="chip" data-demo="admin@demo.com|admin123">Cafetería (admin)</button>`}
+            <button class="chip" data-demo="cliente@demo.com|Cliente#2026">Cliente con historial</button>
+            ${S.kiosco ? "" : `<button class="chip" data-demo="admin@demo.com|Barista#2026">Cafetería (admin)</button>`}
           </div>` : ""}
           <p class="enlace-modo">${S.kiosco
             ? `<a href="${location.pathname}">Salir del modo kiosco</a>`
@@ -250,42 +272,149 @@
 
     let modo = "ingresar";
     const form = $("#form-auth");
-    $$(".tab", app).forEach(b => b.addEventListener("click", () => {
-      modo = b.dataset.tab;
-      $$(".tab", app).forEach(x => { x.classList.toggle("activo", x === b); x.setAttribute("aria-selected", x === b); });
-      $("#campo-nombre").hidden = modo !== "registro";
-      form.password.autocomplete = modo === "registro" ? "new-password" : "current-password";
-      $("#btn-auth").textContent = modo === "registro" ? "Crear cuenta" : "Ingresar";
-      $("#error-auth").hidden = true;
+    const btn = $("#btn-auth");
+    const errGeneral = $("#error-auth");
+    const tocados = new Set();
+    const NIVELES_FUERZA = ["", "Muy débil", "Débil", "Segura", "Muy segura"];
+
+    const marcar = (nombre, mensaje) => {
+      const input = form[nombre];
+      const salida = $("#e-" + { nombre: "nombre", email: "email", password: "clave", confirmar: "confirmar" }[nombre]);
+      input.setAttribute("aria-invalid", mensaje ? "true" : "false");
+      input.classList.toggle("invalido", Boolean(mensaje));
+      salida.textContent = mensaje || "";
+      salida.hidden = !mensaje;
+      return !mensaje;
+    };
+    const datosPersonales = () => ({ email: form.email.value.trim(), nombre: form.nombre.value.trim() });
+
+    // Reglas de cada campo. En "ingresar" solo se exige formato de correo y contraseña no vacía:
+    // la política de contraseña segura se aplica al crearla (registro), como recomienda OWASP.
+    const validar = {
+      nombre: () => modo !== "registro" || marcar("nombre", D.validarNombre(form.nombre.value)),
+      email: () => marcar("email", D.validarEmail(form.email.value)),
+      password: () => marcar("password", modo === "registro"
+        ? D.validarClave(form.password.value, datosPersonales())
+        : (form.password.value ? null : "Escribe tu contraseña.")),
+      confirmar: () => modo !== "registro" || marcar("confirmar",
+        !form.confirmar.value ? "Confirma tu contraseña." :
+        form.confirmar.value !== form.password.value ? "Las contraseñas no coinciden." : null)
+    };
+
+    const pintarReglas = () => {
+      if (modo !== "registro") return;
+      const clave = form.password.value;
+      const reglas = D.reglasClave(clave, datosPersonales());
+      const fuerza = D.fuerzaClave(clave, datosPersonales());
+      $("#reglas-clave").innerHTML = reglas.map(r =>
+        `<li class="${r.ok ? "ok" : ""}"><span aria-hidden="true">${r.ok ? "✓" : "○"}</span> ${r.texto}<span class="sr-only">${r.ok ? " (cumplido)" : " (pendiente)"}</span></li>`).join("");
+      const barra = $("#medidor-barra");
+      barra.style.width = (fuerza / 4 * 100) + "%";
+      barra.dataset.nivel = fuerza;
+      $("#medidor-texto").textContent = clave ? "Seguridad: " + NIVELES_FUERZA[fuerza] : "";
+    };
+
+    // Bloqueo temporal tras 5 intentos fallidos (protección básica contra fuerza bruta)
+    const BLOQUEO_KEY = "cafe_intentos";
+    const leerBloqueo = () => { try { return JSON.parse(localStorage.getItem(BLOQUEO_KEY)) || { fallos: 0, hasta: 0 }; } catch (e) { return { fallos: 0, hasta: 0 }; } };
+    const guardarBloqueo = (b) => { try { localStorage.setItem(BLOQUEO_KEY, JSON.stringify(b)); } catch (e) { /* ignorar */ } };
+    let cuentaAtras = null;
+    const textoBoton = () => modo === "registro" ? "Crear cuenta" : "Ingresar";
+    const revisarBloqueo = () => {
+      clearInterval(cuentaAtras);
+      const actualizar = () => {
+        const resta = Math.ceil((leerBloqueo().hasta - Date.now()) / 1000);
+        if (resta > 0 && modo === "ingresar") {
+          btn.disabled = true;
+          btn.textContent = `Demasiados intentos. Espera ${resta} s`;
+          return true;
+        }
+        clearInterval(cuentaAtras);
+        btn.disabled = false;
+        btn.textContent = textoBoton();
+        return false;
+      };
+      if (actualizar()) cuentaAtras = setInterval(actualizar, 1000);
+    };
+
+    const cambiarModo = (nuevo) => {
+      modo = nuevo;
+      $$(".tab", app).forEach(x => { const activo = x.dataset.tab === modo; x.classList.toggle("activo", activo); x.setAttribute("aria-selected", activo); });
+      const registro = modo === "registro";
+      $("#campo-nombre").hidden = !registro;
+      $("#campo-confirmar").hidden = !registro;
+      $("#ayuda-clave").hidden = !registro;
+      form.password.autocomplete = registro ? "new-password" : "current-password";
+      form.password.placeholder = registro ? "Crea una contraseña segura" : "Tu contraseña";
+      tocados.clear();
+      ["nombre", "email", "password", "confirmar"].forEach(n => marcar(n, null));
+      errGeneral.hidden = true;
+      pintarReglas();
+      revisarBloqueo();
+    };
+    $$(".tab", app).forEach(b => b.addEventListener("click", () => cambiarModo(b.dataset.tab)));
+
+    // Validación en vivo: al salir de un campo y, después, mientras se corrige
+    ["nombre", "email", "password", "confirmar"].forEach(n => {
+      form[n].addEventListener("blur", () => { if (form[n].value) { tocados.add(n); validar[n](); } });
+      form[n].addEventListener("input", () => {
+        if (n === "password" || n === "nombre" || n === "email") pintarReglas();
+        if (tocados.has(n)) validar[n]();
+        if (n === "password" && tocados.has("confirmar")) validar.confirmar();
+      });
+    });
+
+    $$(".ver-clave", app).forEach(b => b.addEventListener("click", () => {
+      const input = $("#" + b.dataset.ver);
+      const visible = input.type === "password";
+      input.type = visible ? "text" : "password";
+      b.setAttribute("aria-pressed", visible);
+      b.setAttribute("aria-label", visible ? "Ocultar contraseña" : "Mostrar contraseña");
+      b.textContent = visible ? "🙈" : "👁";
     }));
+
     $$("[data-demo]", app).forEach(b => b.addEventListener("click", () => {
       const [e, p] = b.dataset.demo.split("|");
+      if (modo !== "ingresar") cambiarModo("ingresar");
       form.email.value = e; form.password.value = p;
       form.requestSubmit();
     }));
+
     form.addEventListener("submit", async (ev) => {
       ev.preventDefault();
-      const err = $("#error-auth");
-      const email = form.email.value.trim();
+      errGeneral.hidden = true;
+      if (btn.disabled) return;
+      ["nombre", "email", "password", "confirmar"].forEach(n => tocados.add(n));
+      const resultados = ["nombre", "email", "password", "confirmar"].map(n => validar[n]());
+      if (resultados.includes(false)) {
+        const primero = $$("[aria-invalid=true]", form)[0];
+        if (primero) primero.focus();
+        return;
+      }
+      const email = form.email.value.trim().toLowerCase();
       const password = form.password.value;
-      const nombre = form.nombre.value.trim();
-      const fallo = (m) => { err.textContent = m; err.hidden = false; };
-      err.hidden = true;
-      if (!/^\S+@\S+\.\S+$/.test(email)) return fallo("Escribe un correo válido.");
-      if (password.length < 6) return fallo("La contraseña debe tener al menos 6 caracteres.");
-      if (modo === "registro" && !nombre) return fallo("Escribe tu nombre.");
-      const btn = $("#btn-auth");
+      const nombre = form.nombre.value.trim().replace(/\s+/g, " ");
       btn.disabled = true; btn.textContent = "Un momento…";
       try {
         S.sesion = modo === "registro" ? await api.registrar(email, password, nombre) : await api.ingresar(email, password);
+        guardarBloqueo({ fallos: 0, hasta: 0 });
         await cargarDatos();
         location.hash = "#/menu";
         toast("¡Hola, " + perfil().nombre.split(" ")[0] + "!");
       } catch (e) {
-        fallo(e.message);
-        btn.disabled = false; btn.textContent = modo === "registro" ? "Crear cuenta" : "Ingresar";
+        errGeneral.textContent = e.message;
+        errGeneral.hidden = false;
+        if (modo === "ingresar") {
+          const b = leerBloqueo();
+          b.fallos += 1;
+          if (b.fallos >= 5) { b.hasta = Date.now() + 30000; b.fallos = 0; }
+          guardarBloqueo(b);
+        }
+        btn.disabled = false; btn.textContent = textoBoton();
+        revisarBloqueo();
       }
     });
+    revisarBloqueo();
   }
 
   /* ================= vista: bienvenida (Hito 1) ================= */
