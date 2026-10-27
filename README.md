@@ -66,7 +66,19 @@ Capa de datos          Supabase PostgreSQL: profiles, productos, pedidos, pedido
 ```
 
 - **Seguridad**: Row Level Security. Cada cliente solo ve sus pedidos; el administrador ve todo. Los precios se calculan en el servidor y un cliente no puede autoasignarse el rol de administrador.
-- **Modo demo**: sin credenciales en `js/config.js`, todo funciona con datos en el navegador. Cuentas: `cliente@demo.com / cliente123` (con historial) y `admin@demo.com / admin123`.
+- **Modo demo**: sin credenciales en `js/config.js`, todo funciona con datos en el navegador. Cuentas: `cliente@demo.com / Cliente#2026` (con historial) y `admin@demo.com / Barista#2026`.
+
+## Validaciones de la cuenta
+
+| Campo | Reglas |
+|---|---|
+| Correo | Estructura válida: un solo `@`, parte local de hasta 64 caracteres sin puntos al inicio/final ni seguidos, dominio con extensión de 2+ letras, sin espacios, máx. 254 caracteres |
+| Contraseña (registro) | 8–64 caracteres, mayúscula, minúscula, número, símbolo, sin espacios, sin incluir el nombre ni el correo, no estar en la lista de contraseñas comunes. Medidor de seguridad y lista de requisitos en vivo |
+| Confirmación | Debe coincidir con la contraseña |
+| Nombre | 2–60 letras y espacios |
+| Inicio de sesión | Formato de correo + contraseña no vacía; bloqueo de 30 s tras 5 intentos fallidos; mensaje genérico ("correo o contraseña incorrectos") para no revelar qué cuentas existen |
+
+Las reglas se validan en el formulario **y otra vez en la capa de datos** antes de crear la cuenta. Con Supabase, configura también la política en el servidor: *Authentication → Providers → Email → Minimum password length = 8* y *Password requirements = lowercase, uppercase, digits and symbols* (y, si tu plan lo permite, *Prevent use of leaked passwords*).
 
 ## Puesta en marcha con Supabase
 
