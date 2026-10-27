@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Sistema inteligente de pedidos e hiperpersonalización de consumo en cafeterías">
+  <meta name="theme-color" content="#5b3a29">
+  <title>Café Inteligente</title>
+  <link rel="icon" href="img/icono.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div id="banner-demo" class="banner-demo" hidden>
+    Modo demostración: los datos se guardan solo en este navegador. Configura Supabase en <code>js/config.js</code> para usar la base de datos real.
+  </div>
+
+  <header id="topbar" class="topbar" hidden>
+    <a href="#/menu" class="marca"><img src="img/icono.svg" alt="" width="28" height="28"> <span>Café Inteligente</span></a>
+    <nav class="nav-escritorio" id="nav-escritorio"></nav>
+    <button class="btn-link" id="btn-salir" type="button">Salir</button>
+  </header>
+
+  <main id="app" class="app" aria-live="polite"></main>
+
+  <nav id="nav-movil" class="nav-movil" hidden></nav>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/datos-demo.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/recomendador.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
