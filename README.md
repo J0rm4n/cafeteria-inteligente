@@ -62,6 +62,21 @@ Tamaño (8/12/16 oz), tipo de leche (entera, deslactosada, almendras, avena) y e
 - **Factura**: cada pedido genera una factura de venta (N.° `PI1-000123`) con base gravable, impoconsumo del 8 % incluido y total. Se abre al confirmar el pedido, desde *Mis pedidos* o desde el dashboard, y se imprime o guarda como **PDF**. Es un documento de prueba: no es factura electrónica válida ante la DIAN.
 - En modo demo el tiempo real funciona entre dos pestañas del mismo navegador (útil para presentar: una como cliente y otra como cafetería).
 
+## Perfil de la cafetería (Dashboard)
+
+Las cuentas con rol `admin` son el perfil de la cafetería: al iniciar sesión entran directo al Dashboard, sin el menú de cliente.
+
+- **Pedidos**: tablero en tiempo real con avisos.
+- **Estadísticas**: filtro por periodo (hoy, 7 días, 30 días, todo) con comparación frente al periodo anterior; ventas, pedidos, ticket promedio, clientes atendidos, aceptación de recomendaciones y hora pico; gráficas de ventas por día (o por hora) y de pedidos por hora; más vendidos, ingresos por producto y por categoría, clientes frecuentes, mood y franjas. Exporta los pedidos del periodo a **CSV** (Excel).
+- **Menú e inventario**: productos, precios, stock y visibilidad.
+
+Para convertir una cuenta en cafetería, en Supabase → SQL Editor:
+
+```sql
+update public.profiles set rol = 'admin', perfil_completo = true
+where id = (select id from auth.users where email = 'correo@ejemplo.com');
+```
+
 ## Arquitectura
 
 ```
