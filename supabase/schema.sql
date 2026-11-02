@@ -219,6 +219,12 @@ grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on all tables in schema public to authenticated;
 grant usage, select on all sequences in schema public to authenticated;
 
+-- Tiempo real: la cafetería recibe cada pedido nuevo al instante (Supabase Realtime respeta RLS)
+do $$ begin
+  alter publication supabase_realtime add table public.pedidos;
+exception when duplicate_object or undefined_object then null;
+end $$;
+
 grant execute on function public.menu_para_mi() to authenticated;
 grant execute on function public.crear_pedido(jsonb, text, text) to authenticated;
 grant execute on function public.productos_populares() to authenticated;
