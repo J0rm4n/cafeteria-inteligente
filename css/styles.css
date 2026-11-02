@@ -524,3 +524,22 @@ body.kiosco .btn-redondo { min-width: 46px; height: 46px; }
   body.imprimiendo-factura .no-imprimir { display: none !important; }
   @page { margin: 14mm; }
 }
+
+/* ---------- estadísticas del dashboard ---------- */
+.delta { color: var(--suave); }
+.delta.sube { color: var(--ok); }
+.delta.baja { color: var(--error); }
+.paneles-2 { margin-bottom: 14px; }
+@media (min-width: 900px) { .paneles.paneles-2 { grid-template-columns: 3fr 2fr; } }
+.grafica { display: flex; align-items: stretch; gap: 3px; height: 210px; padding-top: 4px; }
+.grafica .col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
+.col-barra { width: 100%; max-width: 34px; border-radius: 5px 5px 2px 2px; background: linear-gradient(180deg, var(--cobre-claro), var(--cobre)); }
+.col:hover .col-barra { background: var(--azul); }
+.col-valor { font-size: .62rem; color: var(--suave); white-space: nowrap; writing-mode: vertical-rl; transform: rotate(180deg); }
+.col-etq { font-size: .66rem; color: var(--suave); white-space: nowrap; height: 14px; width: 0; display: flex; justify-content: center; overflow: visible; }
+.grafica { overflow: hidden; }
+.paneles > .tarjeta { min-width: 0; }
+.ranking { margin: 0; padding-left: 20px; display: grid; gap: 10px; }
+.ranking li { padding-left: 4px; }
+.ranking li span { font-weight: 600; display: block; }
+.ranking small { color: var(--suave); }
