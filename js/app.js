@@ -24,7 +24,13 @@
     adminTab: "pedidos",
     filtroAdmin: "activos",
     temporizador: null,
-    kiosco: new URLSearchParams(location.search).get("modo") === "kiosco"
+    kiosco: new URLSearchParams(location.search).get("modo") === "kiosco",
+    // Tiempo real
+    avisosNuevos: new Set(),   // pedidos que la cafetería aún no ha visto
+    conexion: "conectando",
+    estadosMios: {},           // último estado conocido de los pedidos del cliente
+    recargarAdmin: null,
+    desuscribir: []
   };
   const perfil = () => S.sesion.perfil;
   const esAdmin = () => S.sesion && perfil().rol === "admin";
@@ -55,6 +61,65 @@
     S.globales = globales;
     S.carrito = S.carrito.filter(l => producto(l.producto_id));
     guardarCarrito();
+    S.estadosMios = Object.fromEntries(misPedidos.map(p => [p.id, p.estado]));
+  }
+
+  /* ================= tiempo real: notificaciones de pedidos ================= */
+  const datosCliente = () => ({ nombre: perfil().nombre, email: S.sesion.user.email });
+  const resumenItems = (p) => p.items.map(i => (i.cantidad > 1 ? i.cantidad + "× " : "") + i.nombre).join(", ");
+
+  function detenerTiempoReal() {
+    S.desuscribir.forEach(f => { try { f(); } catch (e) { /* ignorar */ } });
+    S.desuscribir = [];
+  }
+
+  function iniciarTiempoReal() {
+    detenerTiempoReal();
+    if (!S.sesion) return;
+    if (esAdmin()) {
+      S.desuscribir.push(api.suscribirPedidos(alNuevoPedido, (estado) => {
+        S.conexion = estado;
+        const indicador = $("#en-vivo");
+        if (indicador) { indicador.className = "en-vivo " + estado; indicador.textContent = estado === "en-vivo" ? "● En vivo" : "○ Conectando…"; }
+      }));
+    }
+    S.desuscribir.push(api.suscribirMisPedidos(S.sesion.user.id, alCambioMiPedido));
+  }
+
+  // La cafetería recibe un pedido nuevo
+  function alNuevoPedido(p) {
+    if (!p) return;
+    S.avisosNuevos.add(p.id);
+    actualizarContadorAvisos();
+    avisos.sonar();
+    const titulo = `🔔 Nuevo pedido #${p.id}`;
+    const cuerpo = `${p.cliente || "Cliente"} · ${dinero(p.total)} · ${resumenItems(p)}`;
+    avisos.notificar(titulo, cuerpo, "pedido-" + p.id);
+    avisos.mostrar({ titulo, cuerpo, tipo: "nuevo",
+      accion: rutaActual() === "admin" ? null : { texto: "Ver pedidos", fn: () => { S.adminTab = "pedidos"; location.hash = "#/admin"; } } });
+    if (S.recargarAdmin) S.recargarAdmin();
+  }
+
+  // El cliente recibe el cambio de estado de su pedido
+  function alCambioMiPedido({ id, estado }) {
+    const antes = S.estadosMios[id];
+    S.estadosMios[id] = estado;
+    if (!antes || antes === estado) return;
+    const textos = {
+      preparando: ["👩‍🍳 Estamos preparando tu pedido #" + id, "Te avisaremos cuando esté listo."],
+      listo: ["☕ ¡Tu pedido #" + id + " está listo!", "Acércate a la barra para recogerlo."],
+      entregado: ["✅ Pedido #" + id + " entregado", "¡Que lo disfrutes! Tu factura está en Mis pedidos."]
+    };
+    const [titulo, cuerpo] = textos[estado] || ["Pedido #" + id, "Nuevo estado: " + estado];
+    if (estado === "listo") { avisos.sonar(); avisos.notificar(titulo, cuerpo, "mi-pedido-" + id); }
+    avisos.mostrar({ titulo, cuerpo, tipo: estado === "listo" ? "listo" : "info" });
+    if (rutaActual() === "pedidos") vistaPedidos();
+  }
+
+  function actualizarContadorAvisos() {
+    const n = S.avisosNuevos.size;
+    document.title = (n ? `(${n}) ` : "") + "Café Inteligente · Optimizando la decisión";
+    pintarNavegacion();
   }
 
   function agregarLinea(producto_id, opciones, recomendado, cantidad = 1) {
@@ -167,7 +232,7 @@
       ["pedidos", "🧾", "Pedidos"],
       ["perfil", "👤", "Perfil"]
     ];
-    if (esAdmin()) enlaces.push(["admin", "📊", "Cafetería"]);
+    if (esAdmin()) enlaces.push(["admin", "📊", "Cafetería", S.avisosNuevos.size]);
     if (S.kiosco) enlaces = enlaces.slice(0, 2);
     const html = enlaces.map(([r, ico, txt, badge]) =>
       `<a href="#/${r}" class="${ruta === r ? "activo" : ""}" ${ruta === r ? 'aria-current="page"' : ""}>
@@ -181,6 +246,8 @@
 
   async function enrutar() {
     clearInterval(S.temporizador);
+    S.recargarAdmin = null;
+    app.onclick = null;
     $$(".capa").forEach(c => c.remove());
     document.body.classList.remove("sin-scroll");
     const ruta = rutaActual();
@@ -404,6 +471,7 @@
         S.sesion = modo === "registro" ? await api.registrar(email, password, nombre) : await api.ingresar(email, password);
         guardarBloqueo({ fallos: 0, hasta: 0 });
         await cargarDatos();
+        iniciarTiempoReal();
         location.hash = "#/menu";
         toast("¡Hola, " + perfil().nombre.split(" ")[0] + "!");
       } catch (e) {
@@ -782,10 +850,23 @@
         <p>${dinero(total)} · ${S.kiosco ? "Recógelo en la barra cuando lo llamemos." : "Te avisaremos cuando esté listo."}</p>
         ${S.kiosco ? `<p class="ayuda" id="cuenta">Cerrando sesión en 8 s…</p><button class="btn btn-primario btn-bloque" id="conf-ok">Terminar</button>`
           : `<button class="btn btn-primario btn-bloque" id="conf-ok">Ver mis pedidos</button>`}
+        <div class="conf-extra">
+          <button class="btn btn-sm" id="conf-factura">🧾 Ver factura</button>
+          ${!S.kiosco && avisos.permiso() === "default" ? `<button class="btn btn-sm" id="conf-avisar">🔔 Avisarme cuando esté listo</button>` : ""}
+        </div>
       </div>`;
     document.body.appendChild(capa);
     const ok = $("#conf-ok", capa);
     ok.focus();
+    $("#conf-factura", capa).addEventListener("click", async () => {
+      try { factura.abrir(await api.obtenerPedido(id), datosCliente()); } catch (e) { toast(e.message, "error"); }
+    });
+    const avisar = $("#conf-avisar", capa);
+    if (avisar) avisar.addEventListener("click", async () => {
+      const r = await avisos.pedirPermiso();
+      avisar.textContent = r === "granted" ? "✓ Te avisaremos" : "Notificaciones bloqueadas";
+      avisar.disabled = true;
+    });
     if (S.kiosco) {
       let s = 8;
       const t = setInterval(() => {
@@ -817,10 +898,17 @@
             <p class="meta">${metaPedido(p)}</p>
             ${itemsHTML(p.items)}
             <footer><span>Total</span><strong>${dinero(p.total)}</strong></footer>
+            <button class="btn btn-sm btn-factura" data-factura="${p.id}">🧾 Ver factura ${factura.numero(p.id)}</button>
           </article>`).join("")}</div>`
           : `<section class="vacio"><p>Aún no has hecho pedidos.</p><a class="btn btn-primario" href="#/menu">Hacer mi primer pedido</a></section>`}`;
     };
     pintar();
+    app.onclick = (e) => {
+      const b = e.target.closest("[data-factura]");
+      if (!b) return;
+      const p = S.misPedidos.find(x => x.id === Number(b.dataset.factura));
+      if (p) factura.abrir(p, datosCliente());
+    };
     S.temporizador = setInterval(async () => {
       try { S.misPedidos = await api.misPedidos(S.sesion.user.id); pintar(); } catch (e) { /* reintentar luego */ }
     }, 20000);
@@ -902,31 +990,75 @@
           <span class="barra"><span style="width:${(c / max * 100).toFixed(0)}%"></span></span></li>`).join("") || "<li>Sin datos</li>"}</ul>`;
     };
 
+    const haceCuanto = (iso) => {
+      const min = Math.max(0, Math.round((Date.now() - new Date(iso)) / 60000));
+      return min < 1 ? "ahora" : min < 60 ? `hace ${min} min` : `hace ${Math.floor(min / 60)} h ${min % 60} min`;
+    };
+    const SIGUIENTE = { pendiente: ["preparando", "▶ Empezar a preparar"], preparando: ["listo", "✓ Marcar listo"], listo: ["entregado", "Entregado"] };
+
+    const tarjetaPedido = (p, conSelector) => `
+      <article class="tarjeta pedido ${p.estado} ${S.avisosNuevos.has(p.id) ? "nuevo" : ""}" data-id="${p.id}">
+        <header><strong>#${p.id} · ${esc(p.cliente || "Cliente")}</strong>${S.avisosNuevos.has(p.id) ? `<span class="pildora nuevo">Nuevo</span>` : pildora(p.estado)}</header>
+        <p class="meta">${haceCuanto(p.created_at)} · ${metaPedido(p)}</p>
+        ${itemsHTML(p.items)}
+        <footer>
+          <strong>${dinero(p.total)}</strong>
+          <span class="acciones-pedido">
+            <button class="btn-redondo" data-factura-admin="${p.id}" title="Ver factura" aria-label="Ver factura del pedido ${p.id}">🧾</button>
+            ${conSelector
+              ? `<select data-estado="${p.id}" aria-label="Estado del pedido ${p.id}">
+                  ${ESTADOS.map(([k, t]) => `<option value="${k}" ${p.estado === k ? "selected" : ""}>${t}</option>`).join("")}
+                </select>`
+              : SIGUIENTE[p.estado] ? `<button class="btn btn-primario btn-sm" data-avanzar="${p.id}" data-a="${SIGUIENTE[p.estado][0]}">${SIGUIENTE[p.estado][1]}</button>` : ""}
+          </span>
+        </footer>
+      </article>`;
+
     const tabPedidos = () => {
       const activos = pedidos.filter(p => p.estado !== "entregado");
-      const visibles = S.filtroAdmin === "activos" ? activos : pedidos;
-      return `
+      const permiso = avisos.permiso();
+      const controles = `
+        <div class="barra-vivo">
+          <span id="en-vivo" class="en-vivo ${S.conexion}">${S.conexion === "en-vivo" ? "● En vivo" : "○ Conectando…"}</span>
+          <span class="ayuda">Los pedidos nuevos aparecen solos, con sonido y aviso.</span>
+          <span class="controles-vivo">
+            ${permiso === "default" ? `<button class="btn btn-sm" data-permiso>🔔 Activar notificaciones</button>`
+              : permiso === "granted" ? `<span class="nota">🔔 Notificaciones activas</span>`
+              : permiso === "denied" ? `<span class="nota">🔕 Notificaciones bloqueadas en el navegador</span>` : ""}
+            <button class="btn btn-sm" data-sonido aria-pressed="${avisos.sonidoActivo()}">${avisos.sonidoActivo() ? "🔊 Sonido activado" : "🔇 Sonido apagado"}</button>
+            <button class="btn btn-sm" data-probar>Probar sonido</button>
+          </span>
+        </div>`;
+      if (S.filtroAdmin === "todos") {
+        return controles + `
+          <div class="titulo-seccion">
+            <h2>Historial de pedidos</h2>
+            <div class="chips">
+              <button class="chip" data-filtro="activos">Tablero en curso (${activos.length})</button>
+              <button class="chip activo" data-filtro="todos">Historial</button>
+              <button class="chip" data-refrescar aria-label="Actualizar">↻</button>
+            </div>
+          </div>
+          <div class="lista-pedidos">${pedidos.map(p => tarjetaPedido(p, true)).join("") || `<p class="vacio-mini">Aún no hay pedidos.</p>`}</div>`;
+      }
+      const columnas = [["pendiente", "Pendientes"], ["preparando", "En preparación"], ["listo", "Listos para entregar"]];
+      return controles + `
         <div class="titulo-seccion">
-          <h2>Pedidos entrantes</h2>
+          <h2>Pedidos en curso</h2>
           <div class="chips">
-            <button class="chip ${S.filtroAdmin === "activos" ? "activo" : ""}" data-filtro="activos">En curso (${activos.length})</button>
-            <button class="chip ${S.filtroAdmin === "todos" ? "activo" : ""}" data-filtro="todos">Todos</button>
+            <button class="chip activo" data-filtro="activos">Tablero en curso (${activos.length})</button>
+            <button class="chip" data-filtro="todos">Historial</button>
             <button class="chip" data-refrescar aria-label="Actualizar">↻</button>
           </div>
         </div>
-        <div class="lista-pedidos">
-          ${visibles.map(p => `
-            <article class="tarjeta pedido ${p.estado}">
-              <header><strong>#${p.id} · ${esc(p.cliente || "Cliente")}</strong>${pildora(p.estado)}</header>
-              <p class="meta">${metaPedido(p)}</p>
-              ${itemsHTML(p.items)}
-              <footer>
-                <strong>${dinero(p.total)}</strong>
-                <select data-estado="${p.id}" aria-label="Estado del pedido ${p.id}">
-                  ${ESTADOS.map(([k, t]) => `<option value="${k}" ${p.estado === k ? "selected" : ""}>${t}</option>`).join("")}
-                </select>
-              </footer>
-            </article>`).join("") || `<p class="vacio-mini">No hay pedidos en curso.</p>`}
+        <div class="tablero">
+          ${columnas.map(([estado, titulo]) => {
+            const lista = activos.filter(p => p.estado === estado).sort((a, b) => a.created_at.localeCompare(b.created_at));
+            return `<section class="columna ${estado}" aria-label="${titulo}">
+              <h3>${titulo} <span class="contador">${lista.length}</span></h3>
+              ${lista.map(p => tarjetaPedido(p, false)).join("") || `<p class="vacio-mini">Sin pedidos</p>`}
+            </section>`;
+          }).join("")}
         </div>`;
     };
 
@@ -1002,6 +1134,24 @@
       $$("[data-tab]", app).forEach(b => b.addEventListener("click", () => { S.adminTab = b.dataset.tab; pintar(); }));
       $$("[data-filtro]", app).forEach(b => b.addEventListener("click", () => { S.filtroAdmin = b.dataset.filtro; pintar(); }));
       $$("[data-refrescar]", app).forEach(b => b.addEventListener("click", refrescar));
+      $$("[data-permiso]", app).forEach(b => b.addEventListener("click", async () => { await avisos.pedirPermiso(); pintar(); }));
+      $$("[data-sonido]", app).forEach(b => b.addEventListener("click", () => { avisos.activarSonido(!avisos.sonidoActivo()); pintar(); }));
+      $$("[data-probar]", app).forEach(b => b.addEventListener("click", () => { avisos.sonar(); avisos.notificar("🔔 Prueba de notificación", "Así te avisaremos de cada pedido nuevo.", "prueba"); }));
+      $$("[data-factura-admin]", app).forEach(b => b.addEventListener("click", () => {
+        const p = pedidos.find(x => x.id === Number(b.dataset.facturaAdmin));
+        if (p) factura.abrir(p, { nombre: p.cliente });
+      }));
+      $$("[data-avanzar]", app).forEach(b => b.addEventListener("click", async () => {
+        const id = Number(b.dataset.avanzar);
+        b.disabled = true;
+        try {
+          await api.cambiarEstado(id, b.dataset.a);
+          pedidos.find(p => p.id === id).estado = b.dataset.a;
+          S.avisosNuevos.delete(id); actualizarContadorAvisos();
+          toast("Pedido #" + id + " → " + (ESTADOS.find(e => e[0] === b.dataset.a) || [0, b.dataset.a])[1]);
+          pintar();
+        } catch (e) { toast(e.message, "error"); b.disabled = false; }
+      }));
       $$("[data-estado]", app).forEach(sel => sel.addEventListener("change", async () => {
         try {
           const id = Number(sel.dataset.estado);
@@ -1030,6 +1180,14 @@
       try { [pedidos, catalogo] = await Promise.all([api.todosLosPedidos(), api.productosAdmin()]); pintar(); } catch (e) { /* ignorar */ }
     };
     pintar();
+    S.recargarAdmin = async () => {
+      await refrescar();
+      if (S.adminTab === "pedidos") setTimeout(() => { S.avisosNuevos.clear(); actualizarContadorAvisos(); }, 8000);
+    };
+    if (S.adminTab === "pedidos" && S.avisosNuevos.size) setTimeout(() => {
+      if (rutaActual() !== "admin") return;
+      S.avisosNuevos.clear(); actualizarContadorAvisos(); pintar();
+    }, 8000);
     S.temporizador = setInterval(() => { if (!$(".capa")) refrescar(); }, 15000);
   }
 
@@ -1089,6 +1247,8 @@
 
   /* ================= sesión y modo kiosco ================= */
   async function salir() {
+    detenerTiempoReal();
+    S.avisosNuevos.clear(); actualizarContadorAvisos();
     await api.salir();
     S.sesion = null; S.carrito = []; S.mood = null; guardarCarrito();
     $$(".capa").forEach(c => c.remove());
@@ -1118,7 +1278,7 @@
     const hashInicial = location.hash;
     try {
       S.sesion = await api.sesion();
-      if (S.sesion) await cargarDatos();
+      if (S.sesion) { await cargarDatos(); iniciarTiempoReal(); }
     } catch (e) {
       console.error(e);
       S.sesion = null;
