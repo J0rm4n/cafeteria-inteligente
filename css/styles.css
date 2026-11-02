@@ -183,6 +183,11 @@ legend { font-family: var(--titulos); font-weight: 600; font-size: 1.05rem; marg
 .interruptor.solo span { display: none; }
 .error { color: var(--error); font-size: .9rem; margin: 0 0 12px; }
 .error.exito { color: var(--ok); }
+.btn-texto { align-self: flex-end; background: none; border: 0; padding: 4px 0; color: var(--cobre-claro); font: inherit; font-size: .85rem; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.btn-texto:hover { color: var(--texto); }
+.recuperar { text-align: left; }
+.recuperar h2 { margin-bottom: 8px; }
+.recuperar .acciones { margin-top: 6px; }
 .campo-error { color: var(--error); font-size: .82rem; font-weight: 400; }
 .campo input.invalido { border-color: var(--error); box-shadow: 0 0 0 1px rgba(255,122,107,.35); }
 .con-boton { position: relative; }
