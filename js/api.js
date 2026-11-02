@@ -127,6 +127,28 @@
       async cambiarEstado(id, estado) {
         ok(await db.from("pedidos").update({ estado }).eq("id", id));
       },
+      async obtenerPedido(id) {
+        return normalizar(ok(await db.from("pedidos").select("*, profiles(nombre), " + ITEMS).eq("id", id).single()));
+      },
+      // Tiempo real (Supabase Realtime): la cafetería recibe cada pedido nuevo al instante
+      suscribirPedidos(alNuevo, alEstado) {
+        const canal = db.channel("pedidos-cafeteria-" + Date.now())
+          .on("postgres_changes", { event: "INSERT", schema: "public", table: "pedidos" }, async ({ new: fila }) => {
+            // El pedido se completa (ítems y total) en la misma transacción; se consulta ya terminado
+            await new Promise(r => setTimeout(r, 400));
+            try { alNuevo(await this.obtenerPedido(fila.id)); } catch (e) { console.error(e); }
+          })
+          .subscribe(estado => alEstado && alEstado(estado === "SUBSCRIBED" ? "en-vivo" : "conectando"));
+        return () => db.removeChannel(canal);
+      },
+      // El cliente se entera cuando la cafetería cambia el estado de su pedido
+      suscribirMisPedidos(usuarioId, alCambio) {
+        const canal = db.channel("mis-pedidos-" + usuarioId + "-" + Date.now())
+          .on("postgres_changes", { event: "UPDATE", schema: "public", table: "pedidos", filter: "usuario_id=eq." + usuarioId },
+            ({ new: fila }) => alCambio({ id: fila.id, estado: fila.estado }))
+          .subscribe();
+        return () => db.removeChannel(canal);
+      },
       async estadisticasGlobales() {
         const pop = ok(await db.rpc("productos_populares")) || [];
         const co = ok(await db.rpc("coocurrencias")) || [];
@@ -249,6 +271,34 @@
       async cambiarEstado(id, nuevo) {
         const p = estado.pedidos.find(x => x.id === id);
         if (p) { p.estado = nuevo; guardar(); }
+      },
+      async obtenerPedido(id) {
+        return copia(estado.pedidos.find(p => p.id === id));
+      },
+      // En modo demo el "tiempo real" funciona entre pestañas del mismo navegador (evento storage)
+      suscribirPedidos(alNuevo, alEstado) {
+        const manejar = (e) => {
+          if (e.key !== K || !e.newValue) return;
+          const nuevo = JSON.parse(e.newValue);
+          const conocidos = new Set(estado.pedidos.map(p => p.id));
+          estado.pedidos = nuevo.pedidos; estado.productos = nuevo.productos; estado.usuarios = nuevo.usuarios;
+          nuevo.pedidos.filter(p => !conocidos.has(p.id)).forEach(p => alNuevo(copia(p)));
+        };
+        window.addEventListener("storage", manejar);
+        if (alEstado) alEstado("en-vivo");
+        return () => window.removeEventListener("storage", manejar);
+      },
+      suscribirMisPedidos(usuarioId, alCambio) {
+        const manejar = (e) => {
+          if (e.key !== K || !e.newValue) return;
+          const nuevo = JSON.parse(e.newValue);
+          const antes = Object.fromEntries(estado.pedidos.map(p => [p.id, p.estado]));
+          estado.pedidos = nuevo.pedidos; estado.productos = nuevo.productos;
+          nuevo.pedidos.filter(p => p.usuario_id === usuarioId && antes[p.id] && antes[p.id] !== p.estado)
+            .forEach(p => alCambio({ id: p.id, estado: p.estado }));
+        };
+        window.addEventListener("storage", manejar);
+        return () => window.removeEventListener("storage", manejar);
       },
       async estadisticasGlobales() {
         const popularidad = {};
