@@ -182,6 +182,7 @@ legend { font-family: var(--titulos); font-weight: 600; font-size: 1.05rem; marg
 .interruptor.solo { padding: 0; }
 .interruptor.solo span { display: none; }
 .error { color: var(--error); font-size: .9rem; margin: 0 0 12px; }
+.error.exito { color: var(--ok); }
 .campo-error { color: var(--error); font-size: .82rem; font-weight: 400; }
 .campo input.invalido { border-color: var(--error); box-shadow: 0 0 0 1px rgba(255,122,107,.35); }
 .con-boton { position: relative; }
