@@ -402,6 +402,16 @@
         location.hash = "#/menu";
         toast("¡Hola, " + perfil().nombre.split(" ")[0] + "!");
       } catch (e) {
+        // Con confirmación por correo activa, el registro "falla" con un aviso de éxito
+        if (modo === "registro" && /^Cuenta creada/.test(e.message)) {
+          cambiarModo("ingresar");
+          form.email.value = email;
+          errGeneral.textContent = e.message;
+          errGeneral.classList.add("exito");
+          errGeneral.hidden = false;
+          return;
+        }
+        errGeneral.classList.remove("exito");
         errGeneral.textContent = e.message;
         errGeneral.hidden = false;
         if (modo === "ingresar") {
