@@ -121,7 +121,7 @@
       },
       async todosLosPedidos() {
         const data = ok(await db.from("pedidos").select("*, profiles(nombre), " + ITEMS)
-          .order("created_at", { ascending: false }).limit(300));
+          .order("created_at", { ascending: false }).limit(1000));
         return data.map(normalizar);
       },
       async cambiarEstado(id, estado) {
