@@ -7,6 +7,6 @@
 // políticas RLS de supabase/schema.sql. NUNCA pongas aquí la "secret key".
 window.APP_CONFIG = {
   SUPABASE_URL: "https://xopfntunlcqoxnyafsqn.supabase.co",
-  SUPABASE_ANON_KEY: "",
+  SUPABASE_ANON_KEY: "sb_publishable_FthzqdfXvO9z2w3TV7WFbQ_VReC0Iv5",
   NOMBRE_NEGOCIO: "Café Inteligente"
 };
