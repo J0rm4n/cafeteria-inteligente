@@ -21,7 +21,10 @@
   /*  Modo Supabase                                                      */
   /* ------------------------------------------------------------------ */
   function SupabaseAPI() {
+    // El enlace de "olvidé mi contraseña" vuelve con #...type=recovery en la URL
+    let recuperando = /type=recovery/.test(location.hash);
     const db = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+    db.auth.onAuthStateChange((evento) => { if (evento === "PASSWORD_RECOVERY") recuperando = true; });
     const ITEMS = "pedido_items(producto_id, cantidad, opciones, precio_unitario, recomendado, productos(nombre))";
 
     const normalizar = (p) => ({
@@ -51,6 +54,9 @@
       if (/Password should be at least/i.test(m)) return "La contraseña es demasiado corta.";
       if (/Password should contain|weak.?password|pwned|leaked/i.test(m)) return "La contraseña no es segura o aparece en filtraciones conocidas. Elige otra.";
       if (/rate limit|too many/i.test(m)) return "Demasiados intentos. Espera un momento e inténtalo de nuevo.";
+      if (/should be different|same.?password/i.test(m)) return "La nueva contraseña debe ser distinta de la anterior.";
+      if (/session.*missing|expired|invalid.*(token|link)/i.test(m)) return "El enlace expiró o ya se usó. Pide uno nuevo.";
+      if (/for security purposes/i.test(m)) return "Por seguridad, espera un minuto antes de pedir otro correo.";
       if (/invalid.*email|email.*invalid/i.test(m)) return "El correo no es válido.";
       return m;
     };
@@ -80,6 +86,15 @@
         return this.sesion();
       },
       async salir() { await db.auth.signOut(); },
+      // Recuperación de contraseña: Supabase envía un enlace que vuelve a esta misma página
+      async recuperarClave(email) {
+        ok(await db.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname }));
+      },
+      async cambiarClave(password) {
+        ok(await db.auth.updateUser({ password }));
+        recuperando = false;
+      },
+      get recuperando() { return recuperando; },
       async actualizarPerfil(id, cambios) {
         ok(await db.from("profiles").update(cambios).eq("id", id));
       },
@@ -177,6 +192,16 @@
         return publico(u);
       },
       async salir() { estado.sesion = null; guardar(); },
+      async recuperarClave() {
+        throw new Error("En el modo demostración no se envían correos. Usa las cuentas de prueba.");
+      },
+      async cambiarClave(password) {
+        const u = actual();
+        const error = D.validarClave(password, { email: u.email, nombre: u.nombre });
+        if (error) throw new Error(error);
+        u.clave = password; guardar();
+      },
+      recuperando: false,
       async actualizarPerfil(id, cambios) {
         Object.assign(estado.usuarios.find(x => x.id === id), cambios);
         guardar();
