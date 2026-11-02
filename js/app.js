@@ -23,6 +23,7 @@
     busqueda: "",
     adminTab: "pedidos",
     filtroAdmin: "activos",
+    periodoAdmin: "7",
     temporizador: null,
     kiosco: new URLSearchParams(location.search).get("modo") === "kiosco",
     // Tiempo real
@@ -96,7 +97,7 @@
     const cuerpo = `${p.cliente || "Cliente"} · ${dinero(p.total)} · ${resumenItems(p)}`;
     avisos.notificar(titulo, cuerpo, "pedido-" + p.id);
     avisos.mostrar({ titulo, cuerpo, tipo: "nuevo",
-      accion: rutaActual() === "admin" ? null : { texto: "Ver pedidos", fn: () => { S.adminTab = "pedidos"; location.hash = "#/admin"; } } });
+      accion: rutaActual() === "admin/pedidos" ? null : { texto: "Ver pedidos", fn: () => { location.hash = "#/admin/pedidos"; } } });
     if (S.recargarAdmin) S.recargarAdmin();
   }
 
@@ -226,13 +227,22 @@
     $("#nav-movil").hidden = !logueado;
     if (!logueado) return;
     const ruta = rutaActual();
+    // La cuenta de la cafetería solo ve su Dashboard
+    if (esAdmin() && !S.kiosco) {
+      const html = [["admin/pedidos", "🧾", "Pedidos", S.avisosNuevos.size], ["admin/indicadores", "📈", "Estadísticas"], ["admin/menu", "📦", "Menú e inventario"]]
+        .map(([r, ico, txt, badge]) => `<a href="#/${r}" class="${ruta === r ? "activo" : ""}" ${ruta === r ? 'aria-current="page"' : ""}>
+          <span class="ico" aria-hidden="true">${ico}</span><span>${txt}</span>${badge ? `<span class="badge">${badge}</span>` : ""}</a>`).join("");
+      $("#nav-escritorio").innerHTML = html;
+      $("#nav-movil").innerHTML = html;
+      $("#marca-sub").textContent = "Panel de la cafetería";
+      return;
+    }
     let enlaces = [
       ["menu", "🏠", "Menú"],
       ["carrito", "🛒", "Carrito", cantidadCarrito()],
       ["pedidos", "🧾", "Pedidos"],
       ["perfil", "👤", "Perfil"]
     ];
-    if (esAdmin()) enlaces.push(["admin", "📊", "Cafetería", S.avisosNuevos.size]);
     if (S.kiosco) enlaces = enlaces.slice(0, 2);
     const html = enlaces.map(([r, ico, txt, badge]) =>
       `<a href="#/${r}" class="${ruta === r ? "activo" : ""}" ${ruta === r ? 'aria-current="page"' : ""}>
@@ -250,12 +260,19 @@
     app.onclick = null;
     $$(".capa").forEach(c => c.remove());
     document.body.classList.remove("sin-scroll");
-    const ruta = rutaActual();
+    let ruta = rutaActual();
     if (S.sesion && api.recuperando && ruta !== "nueva-clave") { location.hash = "#/nueva-clave"; return; }
     if (!S.sesion && ruta !== "login") { location.hash = "#/login"; return; }
     if (S.sesion && ruta === "login") { location.hash = "#/menu"; return; }
     if (S.sesion && !perfil().perfil_completo && !esAdmin() && !["bienvenida", "nueva-clave"].includes(ruta)) { location.hash = "#/bienvenida"; return; }
-    if (ruta === "admin" && !esAdmin()) { location.hash = "#/menu"; return; }
+    if (ruta.startsWith("admin") && !esAdmin()) { location.hash = "#/menu"; return; }
+    // Cuenta de la cafetería: siempre en el Dashboard (#/admin/pedidos, #/admin/indicadores, #/admin/menu)
+    if (esAdmin() && !S.kiosco && ruta !== "nueva-clave") {
+      const tab = ruta.split("/")[1];
+      if (!ruta.startsWith("admin/") || !["pedidos", "indicadores", "menu"].includes(tab)) { location.hash = "#/admin/" + S.adminTab; return; }
+      S.adminTab = tab;
+      ruta = "admin";
+    }
     if (S.kiosco && ["pedidos", "perfil", "admin"].includes(ruta)) { location.hash = "#/menu"; return; }
     pintarNavegacion();
     window.scrollTo(0, 0);
@@ -979,7 +996,7 @@
 
   /* ================= vista: dashboard de la cafetería ================= */
   async function vistaAdmin() {
-    app.innerHTML = `<section class="encabezado"><h1>Dashboard de la cafetería</h1></section><p class="cargando">Cargando…</p>`;
+    app.innerHTML = `<section class="encabezado"><h1>Dashboard</h1></section><p class="cargando">Cargando…</p>`;
     let pedidos = await api.todosLosPedidos();
     let catalogo = await api.productosAdmin();
 
@@ -1090,48 +1107,152 @@
         </div>`;
     };
 
+    // ---------- estadísticas ----------
+    const PERIODOS = [["hoy", "Hoy"], ["7", "7 días"], ["30", "30 días"], ["todo", "Todo"]];
+    const DIA = 86400000;
+    const inicioDia = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+    // Devuelve [desde, hasta) del periodo elegido y del periodo anterior equivalente (para comparar)
+    const rango = (periodo) => {
+      const manana = inicioDia(Date.now()).getTime() + DIA;
+      if (periodo === "todo") return { desde: 0, hasta: manana, antes: null };
+      const dias = periodo === "hoy" ? 1 : Number(periodo);
+      const desde = manana - dias * DIA;
+      return { desde, hasta: manana, antes: [desde - dias * DIA, desde], dias };
+    };
+    const enRango = (p, d, h) => { const t = new Date(p.created_at).getTime(); return t >= d && t < h; };
+    const sumar = (lista) => lista.reduce((s, p) => s + p.total, 0);
+    const variacion = (actual, previo) => {
+      if (previo == null) return "";
+      if (!previo) return actual ? `<small class="delta sube">nuevo</small>` : `<small class="delta">sin cambios</small>`;
+      const v = Math.round((actual - previo) / previo * 100);
+      return `<small class="delta ${v > 0 ? "sube" : v < 0 ? "baja" : ""}">${v > 0 ? "▲" : v < 0 ? "▼" : "="} ${Math.abs(v)}% vs. periodo anterior</small>`;
+    };
+    // Gráfica de columnas (CSS); cada dato: [etiqueta, valor, texto del valor]
+    const columnasGrafica = (datos, titulo) => {
+      const max = Math.max(1, ...datos.map(d => d[1]));
+      const cada = Math.ceil(datos.length / 8);
+      return `<div class="grafica" role="img" aria-label="${esc(titulo)}">
+        ${datos.map(([etq, v, txt], i) => `
+          <div class="col" title="${esc(etq)}: ${esc(txt ?? v)}">
+            <span class="col-valor">${v && datos.length <= 16 ? esc(txt ?? v) : ""}</span>
+            <span class="col-barra" style="height:${Math.max(v ? 3 : 0, v / max * (datos.length <= 16 ? 66 : 92)).toFixed(1)}%"></span>
+            <span class="col-etq">${i % cada === 0 ? esc(etq) : ""}</span>
+          </div>`).join("")}
+      </div>`;
+    };
+    const exportarCSV = (lista) => {
+      const filas = [["pedido", "fecha", "cliente", "canal", "estado", "mood", "producto", "cantidad", "precio_unitario", "subtotal", "recomendado"]];
+      lista.forEach(p => p.items.forEach(i => filas.push([p.id, new Date(p.created_at).toLocaleString("es-CO"), p.cliente || "", p.canal, p.estado, p.mood || "",
+        i.nombre, i.cantidad, i.precio_unitario, i.precio_unitario * i.cantidad, i.recomendado ? "si" : "no"])));
+      const csv = "﻿" + filas.map(f => f.map(c => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+      a.download = `pedidos-${S.periodoAdmin}-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    };
+
     const tabIndicadores = () => {
-      const hoy = new Date().toDateString();
-      const deHoy = pedidos.filter(p => new Date(p.created_at).toDateString() === hoy);
-      const ventasHoy = deHoy.reduce((s, p) => s + p.total, 0);
-      const ticket = pedidos.length ? pedidos.reduce((s, p) => s + p.total, 0) / pedidos.length : 0;
-      const kiosco = pedidos.filter(p => p.canal === "kiosco").length;
-      const conRec = pedidos.filter(p => p.items.some(i => i.recomendado)).length;
-      const conMood = pedidos.filter(p => p.mood).length;
-      const conteo = {};
-      pedidos.forEach(p => p.items.forEach(i => { conteo[i.nombre] = (conteo[i.nombre] || 0) + i.cantidad; }));
-      const top = Object.entries(conteo).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([n, c]) => [esc(n), c]);
-      const moods = D.MOODS.map(m => [m.icono + " " + m.label, pedidos.filter(p => p.mood === m.id).length]);
-      const franjas = Object.entries(D.MOMENTOS).map(([k, v]) => [v[0].toUpperCase() + v.slice(1),
-        pedidos.filter(p => R.momentoDelDia(new Date(p.created_at)) === k).length]);
+      const r = rango(S.periodoAdmin);
+      const lista = pedidos.filter(p => enRango(p, r.desde, r.hasta));
+      const previos = r.antes ? pedidos.filter(p => enRango(p, r.antes[0], r.antes[1])) : null;
+      const ventas = sumar(lista);
+      const ticket = lista.length ? ventas / lista.length : 0;
+      const unidades = lista.reduce((s, p) => s + p.items.reduce((t, i) => t + i.cantidad, 0), 0);
+      const clientes = new Set(lista.map(p => p.usuario_id)).size;
       const pct = (a, b) => b ? Math.round(a / b * 100) + "%" : "0%";
+      const conRec = lista.filter(p => p.items.some(i => i.recomendado)).length;
+      const conMood = lista.filter(p => p.mood).length;
+      const kiosco = lista.filter(p => p.canal === "kiosco").length;
+      const enCurso = pedidos.filter(p => p.estado !== "entregado").length;
+
+      // Ventas en el tiempo: por hora si es "hoy", si no por día
+      let serie;
+      if (S.periodoAdmin === "hoy") {
+        serie = Array.from({ length: 16 }, (_, k) => k + 6).map(h => {
+          const v = sumar(lista.filter(p => new Date(p.created_at).getHours() === h));
+          return [h + "h", v, dinero(v)];
+        });
+      } else {
+        const dias = r.dias || Math.min(60, Math.max(1, Math.ceil((r.hasta - (lista.length ? Math.min(...lista.map(p => new Date(p.created_at).getTime())) : r.hasta - DIA)) / DIA)));
+        serie = Array.from({ length: dias }, (_, k) => {
+          const d0 = r.hasta - (dias - k) * DIA;
+          const v = sumar(lista.filter(p => enRango(p, d0, d0 + DIA)));
+          return [new Date(d0).toLocaleDateString("es-CO", { day: "numeric", month: "numeric" }), v, dinero(v)];
+        });
+      }
+      const porHora = Array.from({ length: 16 }, (_, k) => k + 6).map(h => [h + "h", lista.filter(p => new Date(p.created_at).getHours() === h).length]);
+      const hora = porHora.reduce((m, x) => x[1] > m[1] ? x : m, ["—", 0]);
+
+      // Productos y categorías
+      const porProducto = {}, porCategoria = {};
+      lista.forEach(p => p.items.forEach(i => {
+        const ing = i.precio_unitario * i.cantidad;
+        const pr = porProducto[i.nombre] = porProducto[i.nombre] || { u: 0, ing: 0 };
+        pr.u += i.cantidad; pr.ing += ing;
+        const cat = (catalogo.find(c => c.id === i.producto_id) || {}).categoria || "Otros";
+        porCategoria[cat] = (porCategoria[cat] || 0) + ing;
+      }));
+      const topUnidades = Object.entries(porProducto).sort((a, b) => b[1].u - a[1].u).slice(0, 6).map(([n, v]) => [esc(n), v.u]);
+      const topIngresos = Object.entries(porProducto).sort((a, b) => b[1].ing - a[1].ing).slice(0, 6).map(([n, v]) => [esc(n), Math.round(v.ing)]);
+      const categorias = Object.entries(porCategoria).sort((a, b) => b[1] - a[1]).map(([n, v]) => [esc(n), Math.round(v)]);
+
+      // Clientes frecuentes
+      const porCliente = {};
+      lista.forEach(p => { const c = porCliente[p.usuario_id] = porCliente[p.usuario_id] || { n: p.cliente || "Cliente", k: 0, g: 0 }; c.k++; c.g += p.total; });
+      const frecuentes = Object.values(porCliente).sort((a, b) => b.k - a.k || b.g - a.g).slice(0, 5);
+
+      const moods = D.MOODS.map(m => [m.icono + " " + m.label, lista.filter(p => p.mood === m.id).length]);
+      const franjas = Object.entries(D.MOMENTOS).map(([k, v]) => [v[0].toUpperCase() + v.slice(1),
+        lista.filter(p => R.momentoDelDia(new Date(p.created_at)) === k).length]);
+      const barrasDinero = (pares) => barras(pares).replace(/<span class="barra-valor">(\d+)<\/span>/g, (_, n) => `<span class="barra-valor">${dinero(Number(n))}</span>`);
+
       return `
+        <div class="titulo-seccion">
+          <div class="chips" role="group" aria-label="Periodo">
+            ${PERIODOS.map(([k, t]) => `<button class="chip ${S.periodoAdmin === k ? "activo" : ""}" data-periodo="${k}" aria-pressed="${S.periodoAdmin === k}">${t}</button>`).join("")}
+          </div>
+          <div class="chips">
+            <button class="chip" data-refrescar aria-label="Actualizar">↻</button>
+            <button class="btn btn-sm" data-csv ${lista.length ? "" : "disabled"}>⬇ Descargar CSV</button>
+          </div>
+        </div>
         <div class="stats">
-          <div class="stat"><span>Pedidos hoy</span><strong>${deHoy.length}</strong></div>
-          <div class="stat"><span>Ventas hoy</span><strong>${dinero(ventasHoy)}</strong></div>
-          <div class="stat"><span>Ticket promedio</span><strong>${dinero(ticket)}</strong></div>
-          <div class="stat"><span>Desde kiosco</span><strong>${pct(kiosco, pedidos.length)}</strong></div>
-          <div class="stat destacado"><span>Aceptación de recomendaciones</span><strong>${pct(conRec, pedidos.length)}</strong><small>Pedidos con al menos un producto sugerido</small></div>
-          <div class="stat"><span>Clientes que comparten su mood</span><strong>${pct(conMood, pedidos.length)}</strong></div>
+          <div class="stat"><span>Ventas</span><strong>${dinero(ventas)}</strong>${variacion(ventas, previos && sumar(previos))}</div>
+          <div class="stat"><span>Pedidos</span><strong>${lista.length}</strong>${variacion(lista.length, previos && previos.length)}</div>
+          <div class="stat"><span>Ticket promedio</span><strong>${dinero(ticket)}</strong><small>${unidades} productos vendidos</small></div>
+          <div class="stat"><span>Clientes atendidos</span><strong>${clientes}</strong><small>${enCurso} pedidos en curso ahora</small></div>
+          <div class="stat destacado"><span>Aceptación de recomendaciones</span><strong>${pct(conRec, lista.length)}</strong><small>Pedidos con al menos un producto sugerido</small></div>
+          <div class="stat"><span>Hora pico</span><strong>${hora[1] ? hora[0] : "—"}</strong><small>Kiosco: ${pct(kiosco, lista.length)} · Mood: ${pct(conMood, lista.length)}</small></div>
+        </div>
+        ${lista.length ? `
+        <div class="paneles paneles-2">
+          <div class="tarjeta"><h2>${S.periodoAdmin === "hoy" ? "Ventas por hora (hoy)" : "Ventas por día"}</h2>${columnasGrafica(serie, "Ventas en el periodo")}</div>
+          <div class="tarjeta"><h2>Pedidos por hora del día</h2>${columnasGrafica(porHora, "Pedidos por hora")}</div>
         </div>
         <div class="paneles">
-          <div class="tarjeta"><h2>Más vendidos</h2>${barras(top)}</div>
+          <div class="tarjeta"><h2>Más vendidos (unidades)</h2>${barras(topUnidades)}</div>
+          <div class="tarjeta"><h2>Ingresos por producto</h2>${barrasDinero(topIngresos)}</div>
+          <div class="tarjeta"><h2>Ingresos por categoría</h2>${barrasDinero(categorias)}</div>
+          <div class="tarjeta"><h2>Clientes frecuentes</h2>
+            <ol class="ranking">${frecuentes.map(c => `<li><span>${esc(c.n)}</span><small>${c.k} pedido${c.k > 1 ? "s" : ""} · ${dinero(c.g)}</small></li>`).join("")}</ol></div>
           <div class="tarjeta"><h2>Mood de los clientes</h2>${barras(moods)}</div>
           <div class="tarjeta"><h2>Pedidos por franja</h2>${barras(franjas)}</div>
-        </div>`;
+        </div>` : `<section class="vacio"><p>No hay pedidos en este periodo.</p></section>`}`;
     };
 
     const pintar = () => {
-      const tabs = [["pedidos", "🧾 Pedidos"], ["menu", "📦 Menú e inventario"], ["indicadores", "📈 Indicadores"]];
+      const sub = { pedidos: "Recibe y atiende los pedidos de tus clientes en tiempo real.",
+                    indicadores: "Ventas, productos y comportamiento de tus clientes.",
+                    menu: "Productos, precios, stock y visibilidad en el menú." }[S.adminTab];
       app.innerHTML = `
-        <section class="encabezado"><h1>Dashboard de la cafetería</h1>
-          <p class="sub">Gestión de productos, control de pedidos y administración del menú.</p></section>
-        <div class="tabs tabs-admin" role="tablist">
-          ${tabs.map(([k, t]) => `<button role="tab" class="tab ${S.adminTab === k ? "activo" : ""}" data-tab="${k}" aria-selected="${S.adminTab === k}">${t}</button>`).join("")}
-        </div>
+        <section class="encabezado"><p class="sobretitulo">Dashboard · ${esc(perfil().nombre)}</p>
+          <h1>${{ pedidos: "Pedidos", indicadores: "Estadísticas", menu: "Menú e inventario" }[S.adminTab]}</h1>
+          <p class="sub">${sub}</p></section>
         <section>${S.adminTab === "pedidos" ? tabPedidos() : S.adminTab === "menu" ? tabMenu() : tabIndicadores()}</section>`;
 
-      $$("[data-tab]", app).forEach(b => b.addEventListener("click", () => { S.adminTab = b.dataset.tab; pintar(); }));
+      $$("[data-periodo]", app).forEach(b => b.addEventListener("click", () => { S.periodoAdmin = b.dataset.periodo; pintar(); }));
+      $$("[data-csv]", app).forEach(b => b.addEventListener("click", () => { const r = rango(S.periodoAdmin); exportarCSV(pedidos.filter(p => enRango(p, r.desde, r.hasta))); }));
       $$("[data-filtro]", app).forEach(b => b.addEventListener("click", () => { S.filtroAdmin = b.dataset.filtro; pintar(); }));
       $$("[data-refrescar]", app).forEach(b => b.addEventListener("click", refrescar));
       $$("[data-permiso]", app).forEach(b => b.addEventListener("click", async () => { await avisos.pedirPermiso(); pintar(); }));
@@ -1185,7 +1306,7 @@
       if (S.adminTab === "pedidos") setTimeout(() => { S.avisosNuevos.clear(); actualizarContadorAvisos(); }, 8000);
     };
     if (S.adminTab === "pedidos" && S.avisosNuevos.size) setTimeout(() => {
-      if (rutaActual() !== "admin") return;
+      if (!rutaActual().startsWith("admin")) return;
       S.avisosNuevos.clear(); actualizarContadorAvisos(); pintar();
     }, 8000);
     S.temporizador = setInterval(() => { if (!$(".capa")) refrescar(); }, 15000);
