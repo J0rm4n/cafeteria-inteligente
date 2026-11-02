@@ -1,12 +1,12 @@
-// Configuración de conexión a Supabase.
-// Si dejas estos valores vacíos, la aplicación funciona en MODO DEMO
-// (datos guardados solo en el navegador, útil para presentar sin internet de base de datos).
+// Configuración de conexión a Supabase (base de datos y usuarios).
+// Si SUPABASE_ANON_KEY queda vacío, la aplicación funciona en MODO DEMO
+// (datos guardados solo en el navegador).
 //
-// Dónde encontrarlos: Supabase → tu proyecto → Project Settings → API
-//   - Project URL        → SUPABASE_URL
-//   - anon public key    → SUPABASE_ANON_KEY  (es pública; la seguridad la dan las políticas RLS)
+// Dónde encontrar la clave: Supabase → Project Settings → API Keys → "Publishable key"
+// (empieza por sb_publishable_). Es pública por diseño: la seguridad la dan las
+// políticas RLS de supabase/schema.sql. NUNCA pongas aquí la "secret key".
 window.APP_CONFIG = {
-  SUPABASE_URL: "",
+  SUPABASE_URL: "https://xopfntunlcqoxnyafsqn.supabase.co",
   SUPABASE_ANON_KEY: "",
   NOMBRE_NEGOCIO: "Café Inteligente"
 };
