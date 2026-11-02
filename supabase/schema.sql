@@ -214,6 +214,11 @@ create policy "ver items propios o admin" on public.pedido_items
   ));
 -- (Los pedidos e ítems se insertan solo a través de crear_pedido)
 
+-- Permisos de la API (las políticas RLS de arriba siguen limitando qué filas ve cada usuario)
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on all tables in schema public to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+
 grant execute on function public.menu_para_mi() to authenticated;
 grant execute on function public.crear_pedido(jsonb, text, text) to authenticated;
 grant execute on function public.productos_populares() to authenticated;
