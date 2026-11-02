@@ -55,6 +55,13 @@ Tamaño (8/12/16 oz), tipo de leche (entera, deslactosada, almendras, avena) y e
 - **Menú e inventario**: crear y editar productos, alérgenos, stock, alertas de stock bajo, ocultar productos.
 - **Indicadores**: ventas, ticket promedio, % kiosco, **tasa de aceptación de recomendaciones** (métrica para la fase de evaluación), mood de los clientes y pedidos por franja.
 
+## Notificaciones en tiempo real y facturas
+
+- **Cafetería**: el tablero *Pedidos en curso* (Pendientes → En preparación → Listos) recibe cada pedido nuevo al instante con **Supabase Realtime**: campanita, aviso emergente, notificación del navegador, contador en el menú y en el título de la pestaña. Un botón por tarjeta avanza el estado.
+- **Cliente**: recibe un aviso cuando su pedido pasa a *En preparación*, *Listo* (con sonido y notificación) y *Entregado*.
+- **Factura**: cada pedido genera una factura de venta (N.° `PI1-000123`) con base gravable, impoconsumo del 8 % incluido y total. Se abre al confirmar el pedido, desde *Mis pedidos* o desde el dashboard, y se imprime o guarda como **PDF**. Es un documento de prueba: no es factura electrónica válida ante la DIAN.
+- En modo demo el tiempo real funciona entre dos pestañas del mismo navegador (útil para presentar: una como cliente y otra como cafetería).
+
 ## Arquitectura
 
 ```
