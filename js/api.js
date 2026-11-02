@@ -71,8 +71,8 @@
       },
       async registrar(email, password, nombre) {
         validarRegistro(email, password, nombre);
-        const data = ok(await db.auth.signUp({ email, password, options: { data: { nombre } } }));
-        if (!data.session) throw new Error("Cuenta creada. Revisa tu correo para confirmarla y luego inicia sesión.");
+        const data = ok(await db.auth.signUp({ email, password, options: { data: { nombre }, emailRedirectTo: location.origin + location.pathname } }));
+        if (!data.session) throw new Error("Cuenta creada. Te enviamos un correo a " + email + ": abre el enlace para confirmarla y luego inicia sesión.");
         return this.sesion();
       },
       async ingresar(email, password) {
