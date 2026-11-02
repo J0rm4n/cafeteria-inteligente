@@ -184,15 +184,16 @@
     $$(".capa").forEach(c => c.remove());
     document.body.classList.remove("sin-scroll");
     const ruta = rutaActual();
+    if (S.sesion && api.recuperando && ruta !== "nueva-clave") { location.hash = "#/nueva-clave"; return; }
     if (!S.sesion && ruta !== "login") { location.hash = "#/login"; return; }
     if (S.sesion && ruta === "login") { location.hash = "#/menu"; return; }
-    if (S.sesion && !perfil().perfil_completo && !esAdmin() && ruta !== "bienvenida") { location.hash = "#/bienvenida"; return; }
+    if (S.sesion && !perfil().perfil_completo && !esAdmin() && !["bienvenida", "nueva-clave"].includes(ruta)) { location.hash = "#/bienvenida"; return; }
     if (ruta === "admin" && !esAdmin()) { location.hash = "#/menu"; return; }
     if (S.kiosco && ["pedidos", "perfil", "admin"].includes(ruta)) { location.hash = "#/menu"; return; }
     pintarNavegacion();
     window.scrollTo(0, 0);
     const vistas = { login: vistaLogin, bienvenida: vistaBienvenida, menu: vistaMenu, carrito: vistaCarrito,
-                     pedidos: vistaPedidos, perfil: vistaPerfil, admin: vistaAdmin };
+                     pedidos: vistaPedidos, perfil: vistaPerfil, admin: vistaAdmin, "nueva-clave": vistaNuevaClave };
     try {
       await (vistas[ruta] || vistaMenu)();
     } catch (e) {
@@ -238,6 +239,7 @@
                 <button type="button" class="ver-clave" data-ver="f-clave" aria-label="Mostrar contraseña" aria-pressed="false">👁</button>
               </div>
               <small class="campo-error" id="e-clave" hidden></small>
+              <button type="button" class="btn-texto" id="btn-olvide">¿Olvidaste tu contraseña?</button>
             </div>
             <div id="ayuda-clave" hidden>
               <div class="medidor" aria-hidden="true"><span id="medidor-barra"></span></div>
@@ -344,6 +346,7 @@
       $("#campo-nombre").hidden = !registro;
       $("#campo-confirmar").hidden = !registro;
       $("#ayuda-clave").hidden = !registro;
+      $("#btn-olvide").hidden = registro;
       form.password.autocomplete = registro ? "new-password" : "current-password";
       form.password.placeholder = registro ? "Crea una contraseña segura" : "Tu contraseña";
       tocados.clear();
@@ -363,6 +366,8 @@
         if (n === "password" && tocados.has("confirmar")) validar.confirmar();
       });
     });
+
+    $("#btn-olvide").addEventListener("click", () => dialogoRecuperar(form.email.value.trim()));
 
     $$(".ver-clave", app).forEach(b => b.addEventListener("click", () => {
       const input = $("#" + b.dataset.ver);
@@ -425,6 +430,118 @@
       }
     });
     revisarBloqueo();
+  }
+
+  /* ================= recuperación de contraseña ================= */
+  function dialogoRecuperar(emailInicial) {
+    const capa = document.createElement("div");
+    capa.className = "capa centro";
+    capa.innerHTML = `
+      <form class="confirmacion recuperar" role="dialog" aria-modal="true" aria-labelledby="rec-titulo" novalidate>
+        <h2 id="rec-titulo">Recuperar contraseña</h2>
+        <p>Escribe el correo de tu cuenta y te enviaremos un enlace para crear una contraseña nueva.</p>
+        <div class="campo">
+          <label for="rec-email">Correo electrónico</label>
+          <input id="rec-email" type="email" autocomplete="email" maxlength="254" value="${esc(emailInicial)}" aria-describedby="rec-error">
+          <small class="campo-error" id="rec-error" hidden></small>
+        </div>
+        <p class="error" id="rec-mensaje" role="status" hidden></p>
+        <div class="acciones">
+          <button type="button" class="btn" id="rec-cancelar">Cancelar</button>
+          <button type="submit" class="btn btn-primario" id="rec-enviar">Enviar enlace</button>
+        </div>
+      </form>`;
+    document.body.appendChild(capa);
+    const input = $("#rec-email", capa);
+    const cerrar = () => capa.remove();
+    input.focus();
+    $("#rec-cancelar", capa).addEventListener("click", cerrar);
+    capa.addEventListener("click", (e) => { if (e.target === capa) cerrar(); });
+    $("form", capa).addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const err = $("#rec-error", capa), msg = $("#rec-mensaje", capa), btn = $("#rec-enviar", capa);
+      const fallo = D.validarEmail(input.value);
+      err.textContent = fallo || ""; err.hidden = !fallo;
+      input.classList.toggle("invalido", Boolean(fallo));
+      if (fallo) return;
+      btn.disabled = true; btn.textContent = "Enviando…";
+      try {
+        await api.recuperarClave(input.value.trim().toLowerCase());
+        // Mensaje genérico: no revela si el correo existe
+        msg.textContent = "Si ese correo está registrado, te llegará un enlace en unos minutos. Revisa también la carpeta de spam.";
+        msg.className = "error exito";
+        btn.textContent = "Enviado";
+      } catch (x) {
+        msg.textContent = x.message; msg.className = "error";
+        btn.disabled = false; btn.textContent = "Enviar enlace";
+      }
+      msg.hidden = false;
+    });
+  }
+
+  function vistaNuevaClave() {
+    const datos = { email: S.sesion.user.email, nombre: perfil().nombre };
+    app.innerHTML = `
+      <section class="bienvenida">
+        <p class="sobretitulo">Recuperación de cuenta</p>
+        <h1>Crea una contraseña nueva</h1>
+        <p class="sub">${esc(S.sesion.user.email)}</p>
+        <form id="form-clave" class="tarjeta" novalidate>
+          <div class="campo">
+            <label for="n-clave">Nueva contraseña</label>
+            <div class="con-boton">
+              <input id="n-clave" type="password" autocomplete="new-password" maxlength="64" aria-describedby="n-error reglas-clave">
+              <button type="button" class="ver-clave" data-ver="n-clave" aria-label="Mostrar contraseña" aria-pressed="false">👁</button>
+            </div>
+            <small class="campo-error" id="n-error" hidden></small>
+          </div>
+          <div class="medidor" aria-hidden="true"><span id="medidor-barra"></span></div>
+          <p class="medidor-texto" id="medidor-texto" aria-live="polite"></p>
+          <ul class="reglas" id="reglas-clave"></ul>
+          <div class="campo">
+            <label for="n-confirmar">Confirmar contraseña</label>
+            <input id="n-confirmar" type="password" autocomplete="new-password" maxlength="64" aria-describedby="n-error2">
+            <small class="campo-error" id="n-error2" hidden></small>
+          </div>
+          <p class="error" id="n-general" role="alert" hidden></p>
+          <button class="btn btn-primario btn-bloque" type="submit" id="n-guardar">Guardar contraseña</button>
+        </form>
+      </section>`;
+    const clave = $("#n-clave"), conf = $("#n-confirmar");
+    const niveles = ["", "Muy débil", "Débil", "Segura", "Muy segura"];
+    const pintar = () => {
+      const reglas = D.reglasClave(clave.value, datos);
+      const f = D.fuerzaClave(clave.value, datos);
+      $("#reglas-clave").innerHTML = reglas.map(r => `<li class="${r.ok ? "ok" : ""}"><span aria-hidden="true">${r.ok ? "✓" : "○"}</span> ${r.texto}</li>`).join("");
+      $("#medidor-barra").style.width = (f / 4 * 100) + "%";
+      $("#medidor-barra").dataset.nivel = f;
+      $("#medidor-texto").textContent = clave.value ? "Seguridad: " + niveles[f] : "";
+    };
+    const marcar = (input, salida, m) => { input.classList.toggle("invalido", Boolean(m)); salida.textContent = m || ""; salida.hidden = !m; return !m; };
+    pintar();
+    clave.addEventListener("input", pintar);
+    $(".ver-clave", app).addEventListener("click", (e) => {
+      const ver = clave.type === "password";
+      clave.type = conf.type = ver ? "text" : "password";
+      e.currentTarget.textContent = ver ? "🙈" : "👁";
+      e.currentTarget.setAttribute("aria-pressed", ver);
+    });
+    $("#form-clave").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const a = marcar(clave, $("#n-error"), D.validarClave(clave.value, datos));
+      const b = marcar(conf, $("#n-error2"), conf.value !== clave.value ? "Las contraseñas no coinciden." : null);
+      if (!a || !b) return;
+      const btn = $("#n-guardar"), gen = $("#n-general");
+      btn.disabled = true; btn.textContent = "Guardando…"; gen.hidden = true;
+      try {
+        await api.cambiarClave(clave.value);
+        toast("Contraseña actualizada. Ya puedes usarla para iniciar sesión.");
+        location.hash = perfil().perfil_completo || esAdmin() ? "#/menu" : "#/bienvenida";
+      } catch (x) {
+        gen.textContent = x.message; gen.hidden = false;
+        btn.disabled = false; btn.textContent = "Guardar contraseña";
+      }
+    });
   }
 
   /* ================= vista: bienvenida (Hito 1) ================= */
@@ -997,12 +1114,22 @@
     $("#banner-demo").hidden = api.modo !== "demo";
     cargarCarrito();
     app.innerHTML = `<p class="cargando">Cargando…</p>`;
+    // Enlaces de Supabase (confirmar correo / recuperar contraseña) vuelven con datos en el hash
+    const hashInicial = location.hash;
     try {
       S.sesion = await api.sesion();
       if (S.sesion) await cargarDatos();
     } catch (e) {
       console.error(e);
       S.sesion = null;
+    }
+    if (/error_code=otp_expired|error=access_denied/.test(hashInicial)) {
+      history.replaceState(null, "", location.pathname + location.search + "#/login");
+      toast("El enlace expiró o ya se usó. Pide uno nuevo.", "error");
+    } else if (/access_token|type=/.test(hashInicial)) {
+      const destino = api.recuperando ? "#/nueva-clave" : "#/menu";
+      history.replaceState(null, "", location.pathname + location.search + destino);
+      if (!api.recuperando && S.sesion) toast("¡Correo confirmado! Bienvenido.");
     }
     enrutar();
   })();
