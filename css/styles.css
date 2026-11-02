@@ -450,3 +450,77 @@ body.kiosco .chip, body.kiosco .chip-mood { min-height: 50px; padding: 10px 20px
 body.kiosco .producto-img { height: 120px; font-size: 3.6rem; }
 body.kiosco .btn-redondo { min-width: 46px; height: 46px; }
 @media (min-width: 900px) { body.kiosco .grid { grid-template-columns: repeat(3, 1fr); } }
+
+/* ---------- tiempo real: avisos y tablero de pedidos ---------- */
+.avisos { position: fixed; top: 76px; right: 16px; z-index: 70; display: grid; gap: 10px; width: min(360px, calc(100% - 32px)); }
+.aviso {
+  position: relative; display: grid; gap: 6px; padding: 14px 40px 14px 14px; border-radius: 14px;
+  background: var(--tarjeta-2); border: 1px solid var(--borde); box-shadow: 0 12px 30px rgba(0,0,0,.5);
+  animation: entrar .25s ease-out;
+}
+.aviso.nuevo { border-color: var(--cobre); background: linear-gradient(120deg, rgba(217,139,74,.22), var(--tarjeta-2) 70%); }
+.aviso.listo { border-color: var(--ok); background: linear-gradient(120deg, rgba(108,197,154,.2), var(--tarjeta-2) 70%); }
+.aviso strong { font-family: var(--titulos); }
+.aviso p { margin: 0; font-size: .88rem; color: var(--suave); }
+.aviso .btn { justify-self: start; }
+.aviso-cerrar { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; border: 0; border-radius: 50%; background: transparent; color: var(--suave); cursor: pointer; }
+@keyframes entrar { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .aviso, .pedido.nuevo { animation: none !important; } }
+
+.barra-vivo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 12px 14px; margin-bottom: 16px; border: 1px solid var(--borde); border-radius: var(--radio); background: var(--tarjeta); }
+.barra-vivo .ayuda { margin: 0; }
+.controles-vivo { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto; }
+.en-vivo { font-weight: 700; font-size: .85rem; color: var(--suave); }
+.en-vivo.en-vivo { color: var(--ok); }
+
+.tablero { display: grid; gap: 14px; }
+@media (min-width: 900px) { .tablero { grid-template-columns: repeat(3, 1fr); align-items: start; } }
+.columna { display: grid; gap: 10px; padding: 12px; border-radius: var(--radio); background: rgba(0,0,0,.18); border: 1px solid var(--borde); }
+.columna h3 { display: flex; align-items: center; justify-content: space-between; font-size: .95rem; }
+.columna.pendiente h3 { color: #f2c063; }
+.columna.preparando h3 { color: var(--azul); }
+.columna.listo h3 { color: var(--ok); }
+.contador { min-width: 26px; height: 26px; padding: 0 8px; border-radius: 13px; display: inline-grid; place-items: center; background: var(--tarjeta-2); color: var(--texto); font-size: .8rem; }
+.acciones-pedido { display: flex; align-items: center; gap: 8px; }
+.pedido.nuevo { border-color: var(--cobre); box-shadow: 0 0 0 2px rgba(217,139,74,.45); animation: latido 1.6s ease-in-out 3; }
+@keyframes latido { 50% { box-shadow: 0 0 0 6px rgba(217,139,74,.15); } }
+.pildora.nuevo { background: var(--cobre); color: #1a0f07; border-color: var(--cobre); }
+.conf-extra { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 12px; }
+.btn-factura { margin-top: 10px; width: 100%; }
+
+/* ---------- factura (hoja blanca, lista para imprimir) ---------- */
+.factura-contenedor { width: 100%; max-width: 640px; max-height: 92vh; overflow-y: auto; border-radius: 16px; }
+.factura {
+  background: #fff; color: #1f1a16; padding: 28px 24px; border-radius: 16px 16px 0 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: .92rem; line-height: 1.4;
+}
+.factura small { color: #6b5f56; display: block; }
+.factura-cab { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; padding-bottom: 16px; border-bottom: 2px solid #1f1a16; }
+.factura-marca { display: flex; gap: 12px; align-items: flex-start; }
+.factura-marca strong { font-family: var(--titulos); font-size: 1.3rem; display: block; }
+.factura-num { text-align: right; }
+.factura-num span { text-transform: uppercase; letter-spacing: .08em; font-size: .72rem; color: #8a5a1f; font-weight: 700; display: block; }
+.factura-num strong { font-family: var(--titulos); font-size: 1.15rem; display: block; }
+.factura-datos { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; padding: 16px 0; border-bottom: 1px solid #e5ddd5; }
+.factura-datos span { display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: #8a7d73; }
+.factura-tabla { width: 100%; border-collapse: collapse; margin: 14px 0; }
+.factura-tabla th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: #8a7d73; border-bottom: 1px solid #1f1a16; padding: 8px 6px; }
+.factura-tabla td { padding: 9px 6px; border-bottom: 1px solid #eee6de; vertical-align: top; }
+.factura-tabla .num { text-align: right; white-space: nowrap; }
+.factura-totales { margin-left: auto; max-width: 300px; display: grid; gap: 6px; }
+.factura-totales div { display: flex; justify-content: space-between; gap: 12px; }
+.factura-total { font-family: var(--titulos); font-size: 1.2rem; font-weight: 700; border-top: 2px solid #1f1a16; padding-top: 8px; margin-top: 4px; }
+.factura-pie { margin-top: 20px; padding-top: 14px; border-top: 1px dashed #d5cbc1; text-align: center; }
+.factura-pie p { margin: 0 0 6px; }
+.factura-aviso { font-size: .75rem; color: #8a7d73; }
+.factura-acciones { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 16px; background: var(--tarjeta-2); border-radius: 0 0 16px 16px; border: 1px solid var(--borde); border-top: 0; }
+
+@media print {
+  body.imprimiendo-factura { background: #fff !important; }
+  body.imprimiendo-factura > *:not(.capa-factura) { display: none !important; }
+  body.imprimiendo-factura .capa-factura { position: static; background: none; backdrop-filter: none; display: block; padding: 0; }
+  body.imprimiendo-factura .factura-contenedor { max-height: none; overflow: visible; max-width: none; }
+  body.imprimiendo-factura .factura { padding: 0; border-radius: 0; }
+  body.imprimiendo-factura .no-imprimir { display: none !important; }
+  @page { margin: 14mm; }
+}
