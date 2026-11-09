@@ -62,6 +62,14 @@ Tamaño (8/12/16 oz), tipo de leche (entera, deslactosada, almendras, avena) y e
 - **Factura**: cada pedido genera una factura de venta (N.° `PI1-000123`) con base gravable, impoconsumo del 8 % incluido y total. Se abre al confirmar el pedido, desde *Mis pedidos* o desde el dashboard, y se imprime o guarda como **PDF**. Es un documento de prueba: no es factura electrónica válida ante la DIAN.
 - En modo demo el tiempo real funciona entre dos pestañas del mismo navegador (útil para presentar: una como cliente y otra como cafetería).
 
+## Menú
+
+54 productos en 10 categorías, cada una con ícono y orden fijo (definidas en `js/dominio.js` → `CATEGORIAS`):
+
+☕ Cafés calientes · 🧊 Cafés fríos · 🫖 Bebidas calientes · 🥤 Jugos y bebidas frías · 🍳 Desayunos · 🥐 Panadería · 🥪 Sándwiches y wraps · 🥟 Snacks salados · 🍰 Postres · 🥗 Saludable
+
+En "Todas" el menú se muestra agrupado por categoría; los filtros muestran cuántos productos hay en cada una y la búsqueda ignora tildes. Las categorías nuevas creadas desde el Dashboard aparecen al final.
+
 ## Perfil de la cafetería (Dashboard)
 
 Las cuentas con rol `admin` son el perfil de la cafetería: al iniciar sesión entran directo al Dashboard, sin el menú de cliente.
