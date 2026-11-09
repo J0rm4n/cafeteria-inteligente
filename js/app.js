@@ -699,11 +699,29 @@
       </article>`;
   }
 
+  // Búsqueda sin tildes ni mayúsculas ("cafe" encuentra "Café")
+  const normalizarTexto = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
   function filtrarMenu() {
-    const q = S.busqueda.toLowerCase();
+    const q = normalizarTexto(S.busqueda.trim());
     return S.productos
       .filter(p => S.categoria === "Todas" || p.categoria === S.categoria)
-      .filter(p => !q || p.nombre.toLowerCase().includes(q) || (p.descripcion || "").toLowerCase().includes(q));
+      .filter(p => !q || [p.nombre, p.descripcion, p.categoria].some(t => normalizarTexto(t).includes(q)))
+      .sort((a, b) => D.posCategoria(a.categoria) - D.posCategoria(b.categoria));
+  }
+
+  // "Todas" sin búsqueda: el menú se muestra agrupado por categoría
+  function productosHTML() {
+    const lista = filtrarMenu();
+    if (!lista.length) return `<p class="vacio-mini">Sin resultados.</p>`;
+    if (S.categoria !== "Todas" || S.busqueda.trim()) return `<div class="grid">${lista.map(p => tarjetaProducto(p)).join("")}</div>`;
+    return D.ordenarCategorias(lista.map(p => p.categoria)).map(c => {
+      const deCat = lista.filter(p => p.categoria === c);
+      return `<section class="grupo-categoria" aria-label="${esc(c)}">
+        <h3 class="cat-titulo"><span aria-hidden="true">${D.iconoCategoria(c)}</span> ${esc(c)} <span class="contador">${deCat.length}</span></h3>
+        <div class="grid">${deCat.map(p => tarjetaProducto(p)).join("")}</div>
+      </section>`;
+    }).join("");
   }
 
   function vistaMenu() {
@@ -711,7 +729,9 @@
     const recs = R.recomendar({ productos: S.productos, misPedidos: S.misPedidos, globales: S.globales, perfil: pf, mood: S.mood, limite: 4 });
     const nivel = R.nivelMadurez(S.misPedidos.length);
     const habitual = R.pedidoHabitual(S.misPedidos, S.productos);
-    const categorias = ["Todas", ...new Set(S.productos.map(p => p.categoria))];
+    const categorias = ["Todas", ...D.ordenarCategorias(S.productos.map(p => p.categoria))];
+    const cuenta = (c) => c === "Todas" ? S.productos.length : S.productos.filter(p => p.categoria === c).length;
+    if (!categorias.includes(S.categoria)) S.categoria = "Todas";
     const saludo = { manana: "Buenos días", tarde: "Buenas tardes", noche: "Buenas noches" }[R.momentoDelDia()];
     const restr = (pf.restricciones || []).map(r => D.INTOLERANCIAS.find(i => i.id === r)?.corto).filter(Boolean);
 
@@ -751,13 +771,12 @@
 
       <section>
         <div class="titulo-seccion"><h2>Menú completo</h2></div>
-        <input class="buscador" type="search" placeholder="Buscar producto…" value="${esc(S.busqueda)}" aria-label="Buscar producto">
-        <div class="chips desplazable" role="group" aria-label="Categorías">
-          ${categorias.map(c => `<button class="chip ${S.categoria === c ? "activo" : ""}" data-cat="${esc(c)}">${esc(c)}</button>`).join("")}
+        <input class="buscador" type="search" placeholder="Buscar café, arepa, postre…" value="${esc(S.busqueda)}" aria-label="Buscar producto">
+        <div class="chips desplazable categorias" role="group" aria-label="Categorías">
+          ${categorias.map(c => `<button class="chip ${S.categoria === c ? "activo" : ""}" data-cat="${esc(c)}" aria-pressed="${S.categoria === c}">
+            <span aria-hidden="true">${c === "Todas" ? "🍽️" : D.iconoCategoria(c)}</span> ${esc(c)} <span class="chip-num">${cuenta(c)}</span></button>`).join("")}
         </div>
-        <div class="grid" id="grid-productos">
-          ${filtrarMenu().map(p => tarjetaProducto(p)).join("") || `<p class="vacio-mini">Sin resultados.</p>`}
-        </div>
+        <div id="grid-productos">${productosHTML()}</div>
       </section>
       ${cantidadCarrito() ? `<a href="#/carrito" class="flotante">🛒 Ver carrito · ${cantidadCarrito()} · ${dinero(totalCarrito())}</a>` : ""}`;
 
@@ -765,11 +784,18 @@
       S.mood = S.mood === b.dataset.mood ? null : b.dataset.mood;
       vistaMenu();
     }));
-    $$("[data-cat]", app).forEach(b => b.addEventListener("click", () => { S.categoria = b.dataset.cat; vistaMenu(); }));
+    $$("[data-cat]", app).forEach(b => b.addEventListener("click", () => {
+      S.categoria = b.dataset.cat;
+      vistaMenu();
+      // Lleva la vista al inicio del menú y deja visible la categoría elegida
+      $(".buscador", app).scrollIntoView({ block: "start" });
+      const activa = $(".chips.categorias .chip.activo", app);
+      if (activa) activa.scrollIntoView({ block: "nearest", inline: "center" });
+    }));
     const buscador = $(".buscador", app);
     buscador.addEventListener("input", () => {
       S.busqueda = buscador.value;
-      $("#grid-productos").innerHTML = filtrarMenu().map(p => tarjetaProducto(p)).join("") || `<p class="vacio-mini">Sin resultados.</p>`;
+      $("#grid-productos").innerHTML = productosHTML();
     });
     const bh = $("#btn-habitual");
     if (bh) bh.addEventListener("click", () => {
@@ -1090,9 +1116,9 @@
         <div class="tabla-envoltura">
           <table class="tabla">
             <thead><tr><th>Producto</th><th>Precio</th><th>Stock</th><th>Visible</th><th></th></tr></thead>
-            <tbody>${catalogo.map(p => `
+            <tbody>${catalogo.slice().sort((a, b) => D.posCategoria(a.categoria) - D.posCategoria(b.categoria) || a.categoria.localeCompare(b.categoria, "es") || a.nombre.localeCompare(b.nombre, "es")).map(p => `
               <tr class="${p.stock <= 0 ? "fila-agotada" : p.stock <= 5 ? "fila-baja" : ""}">
-                <td><span aria-hidden="true">${esc(p.emoji)}</span> ${esc(p.nombre)}<small>${esc(p.categoria)}${p.personalizable ? " · personalizable" : ""}</small></td>
+                <td><span aria-hidden="true">${esc(p.emoji)}</span> ${esc(p.nombre)}<small>${D.iconoCategoria(p.categoria)} ${esc(p.categoria)}${p.personalizable ? " · personalizable" : ""}</small></td>
                 <td>${dinero(p.precio)}</td>
                 <td><div class="stock">
                   <button class="btn-redondo" data-stock="${p.id}" data-delta="-1" aria-label="Restar stock">−</button>
@@ -1195,7 +1221,7 @@
       }));
       const topUnidades = Object.entries(porProducto).sort((a, b) => b[1].u - a[1].u).slice(0, 6).map(([n, v]) => [esc(n), v.u]);
       const topIngresos = Object.entries(porProducto).sort((a, b) => b[1].ing - a[1].ing).slice(0, 6).map(([n, v]) => [esc(n), Math.round(v.ing)]);
-      const categorias = Object.entries(porCategoria).sort((a, b) => b[1] - a[1]).map(([n, v]) => [esc(n), Math.round(v)]);
+      const categorias = Object.entries(porCategoria).sort((a, b) => b[1] - a[1]).map(([n, v]) => [D.iconoCategoria(n) + " " + esc(n), Math.round(v)]);
 
       // Clientes frecuentes
       const porCliente = {};
@@ -1315,7 +1341,7 @@
   function editarProducto(p, catalogo, alGuardar) {
     const v = p || { nombre: "", descripcion: "", categoria: "", precio: 0, emoji: "☕", stock: 20, disponible: true,
                      personalizable: false, alergenos: [], gustos: [], momento: ["manana", "tarde"] };
-    const categorias = [...new Set(catalogo.map(x => x.categoria))];
+    const categorias = D.ordenarCategorias([...D.CATEGORIAS.map(c => c.nombre), ...catalogo.map(x => x.categoria)]);
     const checks = (nombre, lista, sel) => lista.map(([id, t]) =>
       `<label class="chip-check"><input type="checkbox" name="${nombre}" value="${id}" ${sel.includes(id) ? "checked" : ""}><span>${t}</span></label>`).join("");
     const capa = document.createElement("div");
