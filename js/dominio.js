@@ -48,6 +48,24 @@
 
   /** ¿El producto es apto para estas restricciones?
    *  La lactosa no excluye una bebida personalizable: se sirve con leche vegetal o deslactosada. */
+  // Categorías del menú: orden en que se muestran e ícono de cada una
+  const CATEGORIAS = [
+    { nombre: "Cafés calientes",       icono: "☕" },
+    { nombre: "Cafés fríos",           icono: "🧊" },
+    { nombre: "Bebidas calientes",     icono: "🫖" },
+    { nombre: "Jugos y bebidas frías", icono: "🥤" },
+    { nombre: "Desayunos",             icono: "🍳" },
+    { nombre: "Panadería",             icono: "🥐" },
+    { nombre: "Sándwiches y wraps",    icono: "🥪" },
+    { nombre: "Snacks salados",        icono: "🥟" },
+    { nombre: "Postres",               icono: "🍰" },
+    { nombre: "Saludable",             icono: "🥗" }
+  ];
+  const posCategoria = (n) => { const i = CATEGORIAS.findIndex(c => c.nombre === n); return i < 0 ? 99 : i; };
+  const iconoCategoria = (n) => (CATEGORIAS.find(c => c.nombre === n) || { icono: "🏷️" }).icono;
+  // Ordena nombres de categoría según CATEGORIAS; las creadas desde el Dashboard van al final en orden alfabético
+  const ordenarCategorias = (nombres) => [...new Set(nombres)].sort((a, b) => posCategoria(a) - posCategoria(b) || a.localeCompare(b, "es"));
+
   function esCompatible(p, restricciones) {
     return (restricciones || []).every(r => {
       if (!(p.alergenos || []).includes(r)) return true;
@@ -154,7 +172,7 @@
   }
 
   window.dominio = {
-    INTOLERANCIAS, GUSTOS, MOODS, OPCIONES, MOMENTOS,
+    INTOLERANCIAS, GUSTOS, MOODS, OPCIONES, MOMENTOS, CATEGORIAS, iconoCategoria, ordenarCategorias, posCategoria,
     esCompatible, lechesPermitidas, permiteExtra, precioUnitario, describirOpciones, claveLinea,
     validarEmail, reglasClave, validarClave, fuerzaClave, validarNombre
   };
