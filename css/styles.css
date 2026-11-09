@@ -543,3 +543,14 @@ body.kiosco .btn-redondo { min-width: 46px; height: 46px; }
 .ranking li { padding-left: 4px; }
 .ranking li span { font-weight: 600; display: block; }
 .ranking small { color: var(--suave); }
+
+/* ---------- categorías del menú ---------- */
+.chips.categorias .chip { display: inline-flex; align-items: center; gap: 6px; }
+.chip-num { font-size: .72rem; min-width: 20px; padding: 1px 6px; border-radius: 10px; background: rgba(255,255,255,.08); color: var(--suave); text-align: center; }
+.chip.activo .chip-num { background: rgba(0,0,0,.18); color: inherit; }
+.grupo-categoria { margin-top: 22px; scroll-margin-top: 80px; }
+.grupo-categoria:first-child { margin-top: 6px; }
+.cat-titulo { display: flex; align-items: center; gap: 8px; font-size: 1.05rem; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--borde); }
+.cat-titulo .contador { margin-left: auto; }
+.chips.categorias { position: sticky; top: 58px; z-index: 15; background: var(--fondo); padding: 8px 0 10px; margin-bottom: 4px; }
+.buscador { scroll-margin-top: 70px; }
