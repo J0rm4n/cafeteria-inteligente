@@ -163,7 +163,7 @@
   /*  Modo demo (localStorage)                                           */
   /* ------------------------------------------------------------------ */
   function DemoAPI() {
-    const K = "cafe_demo_v3";
+    const K = "cafe_demo_v4";
     const leer = () => {
       try { const raw = localStorage.getItem(K); if (raw) return JSON.parse(raw); } catch (e) { /* sin almacenamiento */ }
       return null;
