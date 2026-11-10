@@ -30,7 +30,7 @@
       <article class="factura" aria-labelledby="factura-titulo">
         <header class="factura-cab">
           <div class="factura-marca">
-            <img src="img/icono.svg" alt="" width="44" height="44">
+            <img src="img/logo.png" alt="Logo de Café Inteligente" width="56" height="56">
             <div>
               <strong>${esc(NEGOCIO.nombre)}</strong>
               <small>${esc(NEGOCIO.razonSocial)}</small>
