@@ -554,3 +554,9 @@ body.kiosco .btn-redondo { min-width: 46px; height: 46px; }
 .cat-titulo .contador { margin-left: auto; }
 .chips.categorias { position: sticky; top: 58px; z-index: 15; background: var(--fondo); padding: 8px 0 10px; margin-bottom: 4px; }
 .buscador { scroll-margin-top: 70px; }
+
+/* ---------- logo (se muestra tal cual, sin recortes ni filtros) ---------- */
+.marca img { width: 36px; height: auto; flex-shrink: 0; }
+.login-logo { display: block; width: 120px; height: auto; margin-bottom: 14px; }
+@media (min-width: 900px) { .login-logo { width: 150px; } }
+.factura-marca img { width: 56px; height: auto; flex-shrink: 0; }
