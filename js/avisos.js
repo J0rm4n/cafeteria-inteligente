@@ -50,7 +50,7 @@
   function notificar(titulo, cuerpo, etiqueta) {
     if (permiso() !== "granted") return;
     try {
-      const n = new Notification(titulo, { body: cuerpo, icon: "img/icono.svg", tag: etiqueta });
+      const n = new Notification(titulo, { body: cuerpo, icon: "img/logo.png", tag: etiqueta });
       n.onclick = () => { window.focus(); n.close(); };
     } catch (e) { /* algunos móviles solo permiten notificaciones con service worker */ }
   }
