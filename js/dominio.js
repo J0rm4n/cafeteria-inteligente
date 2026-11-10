@@ -143,7 +143,7 @@
       { id: "numero",    texto: "Un número",                       ok: /\d/.test(c) },
       { id: "simbolo",   texto: "Un símbolo (! @ # $ % & * . - _ …)", ok: /[^A-Za-z0-9ÁÉÍÓÚÑáéíóúñ\s]/.test(c) },
       { id: "espacios",  texto: "Sin espacios",                    ok: c.length > 0 && !/\s/.test(c) },
-      { id: "personal",  texto: "Que no contenga tu nombre ni tu correo", ok: c.length > 0 && !datosPersonales },
+      { id: "personal",  texto: nombre ? "Que no contenga tu nombre ni tu correo" : "Que no contenga tu correo", ok: c.length > 0 && !datosPersonales },
       { id: "comun",     texto: "Que no sea una contraseña común", ok: c.length > 0 && !CLAVES_COMUNES.includes(bajo) && !/^(.)\1+$/.test(c)
                                                                   && !BASES_COMUNES.includes(bajo.replace(/[^a-zñ]/g, "")) }
     ];
@@ -171,9 +171,17 @@
     return null;
   }
 
+  // Nombre inicial a partir del correo ("maria.ramos23@..." -> "Maria Ramos"); se puede cambiar en el perfil
+  function nombreDesdeCorreo(email) {
+    const local = String(email || "").split("@")[0];
+    const partes = local.split(/[._+-]+/).map(p => p.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ]/g, "")).filter(p => p.length > 1);
+    const nombre = partes.slice(0, 3).map(p => p[0].toUpperCase() + p.slice(1).toLowerCase()).join(" ");
+    return validarNombre(nombre) ? "Cliente" : nombre;
+  }
+
   window.dominio = {
     INTOLERANCIAS, GUSTOS, MOODS, OPCIONES, MOMENTOS, CATEGORIAS, iconoCategoria, ordenarCategorias, posCategoria,
     esCompatible, lechesPermitidas, permiteExtra, precioUnitario, describirOpciones, claveLinea,
-    validarEmail, reglasClave, validarClave, fuerzaClave, validarNombre
+    validarEmail, reglasClave, validarClave, fuerzaClave, validarNombre, nombreDesdeCorreo
   };
 })();
