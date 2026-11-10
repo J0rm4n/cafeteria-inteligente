@@ -100,12 +100,13 @@ Capa de datos          Supabase PostgreSQL: profiles, productos, pedidos, pedido
 
 ## Validaciones de la cuenta
 
+El registro solo pide **correo y contraseña** y entra de inmediato: la confirmación por correo está desactivada en Supabase.
+
 | Campo | Reglas |
 |---|---|
 | Correo | Estructura válida: un solo `@`, parte local de hasta 64 caracteres sin puntos al inicio/final ni seguidos, dominio con extensión de 2+ letras, sin espacios, máx. 254 caracteres |
-| Contraseña (registro) | 8–64 caracteres, mayúscula, minúscula, número, símbolo, sin espacios, sin incluir el nombre ni el correo, no estar en la lista de contraseñas comunes. Medidor de seguridad y lista de requisitos en vivo |
-| Confirmación | Debe coincidir con la contraseña |
-| Nombre | 2–60 letras y espacios |
+| Contraseña (registro) | 8–64 caracteres, mayúscula, minúscula, número, símbolo, sin espacios, sin incluir el correo, no estar en la lista de contraseñas comunes. Medidor de seguridad y lista de requisitos en vivo; botón 👁 para revisar lo escrito |
+| Nombre | No se pide al registrarse: se toma del correo (`maria.ramos@…` → "Maria Ramos") y se puede cambiar en la bienvenida o en el perfil (2–60 letras y espacios) |
 | Inicio de sesión | Formato de correo + contraseña no vacía; bloqueo de 30 s tras 5 intentos fallidos; mensaje genérico ("correo o contraseña incorrectos") para no revelar qué cuentas existen |
 
 Las reglas se validan en el formulario **y otra vez en la capa de datos** antes de crear la cuenta. Con Supabase, configura también la política en el servidor: *Authentication → Providers → Email → Minimum password length = 8* y *Password requirements = lowercase, uppercase, digits and symbols* (y, si tu plan lo permite, *Prevent use of leaked passwords*).
@@ -113,7 +114,7 @@ Las reglas se validan en el formulario **y otra vez en la capa de datos** antes 
 ## Puesta en marcha con Supabase
 
 1. Crea un proyecto en <https://supabase.com>, abre *SQL Editor* y ejecuta `supabase/schema.sql`.
-2. (Recomendado para pruebas) *Authentication → Sign In / Providers → Email*: desactiva **Confirm email**.
+2. *Authentication → Sign In / Providers → Email*: desactiva **Confirm email** para que el registro entre directo.
 3. Copia la *Project URL* y la *anon public key* (Project Settings → API) en `js/config.js`.
 4. Regístrate en la página y conviértete en administrador:
    ```sql
