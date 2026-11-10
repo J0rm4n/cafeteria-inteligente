@@ -12,8 +12,9 @@
   const D = window.dominio;
 
   // Validación del lado del servidor/capa de datos: nunca se confía solo en el formulario
-  function validarRegistro(email, password, nombre) {
-    const error = D.validarNombre(nombre) || D.validarEmail(email) || D.validarClave(password, { email, nombre });
+  // El registro solo pide correo y contraseña; el nombre inicial sale del correo
+  function validarRegistro(email, password) {
+    const error = D.validarEmail(email) || D.validarClave(password, { email });
     if (error) throw new Error(error);
   }
 
@@ -75,9 +76,11 @@
         const user = data.session.user;
         return { user: { id: user.id, email: user.email }, perfil: await perfil(user) };
       },
-      async registrar(email, password, nombre) {
-        validarRegistro(email, password, nombre);
+      async registrar(email, password) {
+        validarRegistro(email, password);
+        const nombre = D.nombreDesdeCorreo(email);
         const data = ok(await db.auth.signUp({ email, password, options: { data: { nombre }, emailRedirectTo: location.origin + location.pathname } }));
+        // Solo ocurre si en Supabase sigue activa la confirmación por correo
         if (!data.session) throw new Error("Cuenta creada. Te enviamos un correo a " + email + ": abre el enlace para confirmarla y luego inicia sesión.");
         return this.sesion();
       },
@@ -193,10 +196,11 @@
     return {
       modo: "demo",
       async sesion() { const u = actual(); return u ? publico(u) : null; },
-      async registrar(email, password, nombre) {
+      async registrar(email, password) {
         await espera();
         email = email.trim().toLowerCase();
-        validarRegistro(email, password, nombre);   // el "servidor" vuelve a validar
+        validarRegistro(email, password);   // el "servidor" vuelve a validar
+        const nombre = D.nombreDesdeCorreo(email);
         if (estado.usuarios.some(u => u.email === email)) throw new Error("Ese correo ya está registrado.");
         const u = { id: "u-" + Date.now(), email, clave: password, nombre, restricciones: [], preferencias: [],
                     perfil_completo: false, rol: "cliente" };
