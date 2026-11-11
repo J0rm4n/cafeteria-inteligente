@@ -291,7 +291,7 @@
     app.innerHTML = `
       <section class="login">
         <div class="login-hero">
-          <img class="login-logo" src="img/logo.png" alt="Logo de Café Inteligente" width="120" height="119">
+          <img class="login-logo" src="img/logo_sin_fondo.png" alt="Logo de Café Inteligente" width="120" height="123">
           <p class="sobretitulo">${S.kiosco ? "Kiosco de autoservicio" : "Proyecto Integrador I · Ingeniería de Sistemas"}</p>
           <h1>Optimizando<br>la decisión</h1>
           <p class="lead">Sistema inteligente de pedidos y recomendación personalizada para cafeterías, basado en tu perfil y tus preferencias.</p>
