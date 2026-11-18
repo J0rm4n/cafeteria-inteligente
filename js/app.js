@@ -94,7 +94,7 @@
     actualizarContadorAvisos();
     avisos.sonar();
     const titulo = `🔔 Nuevo pedido #${p.id}`;
-    const cuerpo = `${p.cliente || "Cliente"} · ${dinero(p.total)} · ${resumenItems(p)}`;
+    const cuerpo = `${p.entrega === "mesa" ? "🍽️ Mesa " + p.mesa + " · " : "🛎️ Barra · "}${p.cliente || "Cliente"} · ${dinero(p.total)} · ${resumenItems(p)}`;
     avisos.notificar(titulo, cuerpo, "pedido-" + p.id);
     avisos.mostrar({ titulo, cuerpo, tipo: "nuevo",
       accion: rutaActual() === "admin/pedidos" ? null : { texto: "Ver pedidos", fn: () => { location.hash = "#/admin/pedidos"; } } });
@@ -106,10 +106,13 @@
     const antes = S.estadosMios[id];
     S.estadosMios[id] = estado;
     if (!antes || antes === estado) return;
+    const mio = S.misPedidos.find(p => p.id === id);
+    const mesa = mio && mio.entrega === "mesa" ? mio.mesa : null;
     const textos = {
-      preparando: ["👩‍🍳 Estamos preparando tu pedido #" + id, "Te avisaremos cuando esté listo."],
-      listo: ["☕ ¡Tu pedido #" + id + " está listo!", "Acércate a la barra para recogerlo."],
-      entregado: ["✅ Pedido #" + id + " entregado", "¡Que lo disfrutes! Tu factura está en Mis pedidos."]
+      preparando: ["👩‍🍳 Estamos preparando tu pedido #" + id, mesa ? "Te lo llevaremos a la mesa " + mesa + "." : "Te avisaremos cuando esté listo."],
+      listo: mesa ? ["☕ ¡Tu pedido #" + id + " está listo!", "Va en camino a tu mesa " + mesa + "."]
+                  : ["☕ ¡Tu pedido #" + id + " está listo!", "Acércate a la barra para recogerlo."],
+      entregado: ["✅ Pedido #" + id + (mesa ? " entregado en tu mesa" : " entregado"), "¡Que lo disfrutes! Tu factura está en Mis pedidos."]
     };
     const [titulo, cuerpo] = textos[estado] || ["Pedido #" + id, "Nuevo estado: " + estado];
     if (estado === "listo") { avisos.sonar(); avisos.notificar(titulo, cuerpo, "mi-pedido-" + id); }
@@ -131,7 +134,57 @@
     guardarCarrito();
     pintarNavegacion();
     actualizarFlotante();
+    refrescarControles(producto_id);
   }
+
+  // Quita una unidad de un producto sin opciones (botón "−" de la tarjeta del menú)
+  function quitarUno(producto_id) {
+    const linea = S.carrito.find(l => l.clave === D.claveLinea(producto_id, null));
+    if (!linea) return;
+    linea.cantidad -= 1;
+    if (linea.cantidad <= 0) S.carrito = S.carrito.filter(l => l !== linea);
+    guardarCarrito();
+    pintarNavegacion();
+    actualizarFlotante();
+    refrescarControles(producto_id);
+  }
+
+  const cantidadDe = (producto_id) => S.carrito.filter(l => l.producto_id === producto_id).reduce((s, l) => s + l.cantidad, 0);
+
+  // Botones de la tarjeta: "Agregar" o, si ya está en el pedido, el selector − cantidad +
+  function controlesHTML(p, rec) {
+    if (p.stock <= 0) return `<span class="pildora agotado">Agotado</span>`;
+    const n = cantidadDe(p.id);
+    if (p.personalizable) {
+      return `${n ? `<span class="en-pedido">${n} en tu pedido</span>` : ""}
+        <button class="btn btn-primario btn-sm" data-agregar="${p.id}" data-rec="${rec ? 1 : 0}" aria-label="Elegir opciones de ${esc(p.nombre)}">${n ? "+ Otro" : "Elegir"}</button>`;
+    }
+    if (!n) return `<button class="btn btn-primario btn-sm" data-agregar="${p.id}" data-rec="${rec ? 1 : 0}" aria-label="Agregar ${esc(p.nombre)}">Agregar</button>`;
+    return `<div class="stepper" role="group" aria-label="Cantidad de ${esc(p.nombre)}">
+        <button class="btn-redondo" data-quitar="${p.id}" aria-label="Quitar un ${esc(p.nombre)}">−</button>
+        <output aria-live="polite">${n}</output>
+        <button class="btn-redondo" data-agregar="${p.id}" data-rec="${rec ? 1 : 0}" aria-label="Agregar otro ${esc(p.nombre)}" ${n >= p.stock ? "disabled" : ""}>+</button>
+      </div>`;
+  }
+  function refrescarControles(producto_id) {
+    const p = producto(producto_id);
+    if (!p) return;
+    $$(`[data-ctrl="${producto_id}"]`).forEach(el => { el.innerHTML = controlesHTML(p, el.dataset.rec === "1"); });
+  }
+
+  // Foto del producto; si no carga, se muestra su emoji
+  const fotoHTML = (p, clase) => {
+    const f = D.fotoProducto(p);
+    return f ? `<img class="${clase}" src="${f}" alt="" loading="lazy" decoding="async" data-emoji="${esc(p.emoji || "☕")}">`
+             : `<span class="${clase} sin-foto" aria-hidden="true">${esc(p.emoji || "☕")}</span>`;
+  };
+  document.addEventListener("error", (e) => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement) || !img.dataset.emoji) return;
+    const s = document.createElement("span");
+    s.className = img.className + " sin-foto"; s.setAttribute("aria-hidden", "true"); s.textContent = img.dataset.emoji;
+    img.replaceWith(s);
+  }, true);
 
   function actualizarFlotante() {
     const ruta = rutaActual();
@@ -140,7 +193,8 @@
     const f = $(".flotante", app);
     const n = cantidadCarrito();
     const texto = `🛒 Ver carrito · ${n} · ${dinero(totalCarrito())}`;
-    if (f) f.textContent = texto;
+    if (f && !n) f.remove();
+    else if (f) f.textContent = texto;
     else if (n) app.insertAdjacentHTML("beforeend", `<a href="#/carrito" class="flotante">${texto}</a>`);
   }
   const totalCarrito = () => S.carrito.reduce((s, l) => {
@@ -161,7 +215,7 @@
       <div class="hoja" role="dialog" aria-modal="true" aria-labelledby="hoja-titulo">
         <button class="hoja-cerrar" aria-label="Cerrar">✕</button>
         <div class="hoja-cab">
-          <span class="hoja-emoji" aria-hidden="true">${esc(p.emoji)}</span>
+          ${fotoHTML(p, "hoja-foto")}
           <div><h2 id="hoja-titulo">${esc(p.nombre)}</h2><p class="desc">${esc(p.descripcion || "")}</p></div>
         </div>
         ${aprendidas ? `<p class="nota-ia">✨ Preseleccionado según tus pedidos anteriores</p>` : ""}
@@ -181,25 +235,42 @@
         ${D.permiteExtra(p, restr) ? `
         <label class="interruptor"><input type="checkbox" name="extra" ${op.extra ? "checked" : ""}>
           <span>${D.OPCIONES.extra.label} <small>+${dinero(D.OPCIONES.extra.extra)}</small></span></label>` : ""}
+        <div class="hoja-cantidad">
+          <span>Cantidad</span>
+          <div class="stepper grande" role="group" aria-label="Cantidad">
+            <button type="button" class="btn-redondo" data-paso="-1" aria-label="Uno menos">−</button>
+            <output id="hoja-cant" aria-live="polite">1</output>
+            <button type="button" class="btn-redondo" data-paso="1" aria-label="Uno más">+</button>
+          </div>
+        </div>
         <button class="btn btn-primario btn-bloque" id="hoja-ok"></button>
       </div>`;
     document.body.appendChild(capa);
     document.body.classList.add("sin-scroll");
     const btn = $("#hoja-ok", capa);
+    const disponibles = Math.max(1, p.stock - cantidadDe(p.id));
+    let cant = 1;
     const leer = () => {
       op.tamano = $("input[name=tamano]:checked", capa).value;
       op.leche = $("input[name=leche]:checked", capa).value;
       const ex = $("input[name=extra]", capa);
       op.extra = ex ? ex.checked : false;
-      btn.textContent = "Agregar · " + dinero(D.precioUnitario(p, op));
+      $("#hoja-cant", capa).textContent = cant;
+      $("[data-paso='-1']", capa).disabled = cant <= 1;
+      $("[data-paso='1']", capa).disabled = cant >= disponibles;
+      btn.textContent = `Agregar ${cant > 1 ? cant + " " : ""}· ` + dinero(D.precioUnitario(p, op) * cant);
     };
+    $$("[data-paso]", capa).forEach(b => b.addEventListener("click", () => {
+      cant = Math.min(disponibles, Math.max(1, cant + Number(b.dataset.paso)));
+      leer();
+    }));
     const cerrar = () => { capa.remove(); document.body.classList.remove("sin-scroll"); };
     leer();
     capa.addEventListener("change", leer);
     capa.addEventListener("click", (e) => { if (e.target === capa || e.target.closest(".hoja-cerrar")) cerrar(); });
     btn.addEventListener("click", () => {
-      agregarLinea(p.id, { ...op }, recomendado);
-      toast(p.nombre + " agregado · " + D.describirOpciones(op));
+      agregarLinea(p.id, { ...op }, recomendado, cant);
+      toast((cant > 1 ? cant + " × " : "") + p.nombre + " agregado · " + D.describirOpciones(op));
       cerrar();
     });
     btn.focus();
@@ -209,13 +280,17 @@
     const p = producto(id);
     if (!p || p.stock <= 0) return;
     if (p.personalizable) { abrirHoja(p, recomendado); return; }
+    if (cantidadDe(id) >= p.stock) { toast("No hay más unidades de " + p.nombre, "error"); return; }
+    const primero = !cantidadDe(id);
     agregarLinea(id, null, recomendado);
-    toast(p.nombre + " agregado al carrito");
+    if (primero) toast(p.nombre + " agregado · usa + y − para cambiar la cantidad");
   }
 
   app.addEventListener("click", (e) => {
     const b = e.target.closest("[data-agregar]");
-    if (b) alAgregar(Number(b.dataset.agregar), b.dataset.rec === "1");
+    if (b) { alAgregar(Number(b.dataset.agregar), b.dataset.rec === "1"); return; }
+    const q = e.target.closest("[data-quitar]");
+    if (q) quitarUno(Number(q.dataset.quitar));
   });
 
   /* ================= navegación ================= */
@@ -262,12 +337,12 @@
     document.body.classList.remove("sin-scroll");
     let ruta = rutaActual();
     if (S.sesion && api.recuperando && ruta !== "nueva-clave") { location.hash = "#/nueva-clave"; return; }
-    if (!S.sesion && ruta !== "login") { location.hash = "#/login"; return; }
+    if (!S.sesion && !["login", "creditos"].includes(ruta)) { location.hash = "#/login"; return; }
     if (S.sesion && ruta === "login") { location.hash = "#/menu"; return; }
-    if (S.sesion && !perfil().perfil_completo && !esAdmin() && !["bienvenida", "nueva-clave"].includes(ruta)) { location.hash = "#/bienvenida"; return; }
+    if (S.sesion && !perfil().perfil_completo && !esAdmin() && !["bienvenida", "nueva-clave", "creditos"].includes(ruta)) { location.hash = "#/bienvenida"; return; }
     if (ruta.startsWith("admin") && !esAdmin()) { location.hash = "#/menu"; return; }
     // Cuenta de la cafetería: siempre en el Dashboard (#/admin/pedidos, #/admin/indicadores, #/admin/menu)
-    if (esAdmin() && !S.kiosco && ruta !== "nueva-clave") {
+    if (esAdmin() && !S.kiosco && !["nueva-clave", "creditos"].includes(ruta)) {
       const tab = ruta.split("/")[1];
       if (!ruta.startsWith("admin/") || !["pedidos", "indicadores", "menu"].includes(tab)) { location.hash = "#/admin/" + S.adminTab; return; }
       S.adminTab = tab;
@@ -276,7 +351,7 @@
     if (S.kiosco && ["pedidos", "perfil", "admin"].includes(ruta)) { location.hash = "#/menu"; return; }
     pintarNavegacion();
     window.scrollTo(0, 0);
-    const vistas = { login: vistaLogin, bienvenida: vistaBienvenida, menu: vistaMenu, carrito: vistaCarrito,
+    const vistas = { login: vistaLogin, bienvenida: vistaBienvenida, menu: vistaMenu, carrito: vistaCarrito, creditos: vistaCreditos,
                      pedidos: vistaPedidos, perfil: vistaPerfil, admin: vistaAdmin, "nueva-clave": vistaNuevaClave };
     try {
       await (vistas[ruta] || vistaMenu)();
@@ -284,6 +359,26 @@
       console.error(e);
       app.innerHTML = `<section class="vacio"><p>Ocurrió un error: ${esc(e.message)}</p><button class="btn" onclick="location.reload()">Reintentar</button></section>`;
     }
+  }
+
+  /* ================= vista: créditos de las fotos ================= */
+  function vistaCreditos() {
+    const nombres = Object.fromEntries((window.PRODUCTOS_BASE || []).map(p => [p.id, p.nombre]));
+    const lista = window.fotos ? window.fotos.creditos() : [];
+    app.innerHTML = `
+      <section class="encabezado">
+        <h1>Créditos de las fotos</h1>
+        <p class="sub">Las fotos del menú son imágenes libres de <a href="https://commons.wikimedia.org" target="_blank" rel="noopener">Wikimedia Commons</a>, usadas según su licencia y recortadas para el menú. Son ilustrativas: el producto servido puede verse distinto.</p>
+        <p><a class="btn btn-sm" href="${S.sesion ? "#/" + (esAdmin() ? "admin/menu" : "perfil") : "#/login"}">← Volver</a></p>
+      </section>
+      <ul class="creditos-lista">
+        ${lista.map(c => `<li>
+          ${window.fotos.url(c.id) ? `<img src="${window.fotos.url(c.id)}" alt="" loading="lazy">` : ""}
+          <div><strong>${esc(nombres[c.id] || "Producto " + c.id)}</strong>
+            <small>Foto: <a href="${c.fuente}" target="_blank" rel="noopener">${esc(c.archivo)}</a> · Autor: ${esc(c.autor)} ·
+            ${c.licenciaUrl ? `<a href="${c.licenciaUrl}" target="_blank" rel="noopener">${esc(c.licencia)}</a>` : esc(c.licencia)}</small></div>
+        </li>`).join("")}
+      </ul>`;
   }
 
   /* ================= vista: login ================= */
@@ -342,6 +437,7 @@
       </section>
       <footer class="creditos">
         Autores: Jorman Enrique Martínez Ramírez · María Camila Ramos Díaz — Docente evaluador: Miguel Fabián Robles Angarita — Universidad de Santander (UDES)
+        <br><a href="#/creditos">Créditos de las fotos</a>
       </footer>`;
 
     let modo = "ingresar";
@@ -677,7 +773,7 @@
       .map(a => D.INTOLERANCIAS.find(i => i.id === a)?.corto).filter(Boolean);
     return `
       <article class="producto ${agotado ? "agotado" : ""}">
-        <div class="producto-img" aria-hidden="true">${esc(p.emoji || "☕")}</div>
+        <div class="producto-img">${fotoHTML(p, "foto")}<span class="producto-emoji" aria-hidden="true">${esc(p.emoji || "")}</span></div>
         <div class="producto-cuerpo">
           ${motivo ? `<p class="motivo">✨ ${esc(motivo)}</p>` : ""}
           <h3>${esc(p.nombre)}</h3>
@@ -685,8 +781,7 @@
           <p class="contiene">${p.personalizable ? "Personalizable · " : ""}${alergenos.length ? "Contiene: " + esc(alergenos.join(", ")) : "Sin alérgenos comunes"}</p>
           <div class="producto-pie">
             <strong>${p.personalizable ? "desde " : ""}${dinero(p.precio)}</strong>
-            ${agotado ? `<span class="pildora agotado">Agotado</span>`
-              : `<button class="btn btn-primario btn-sm" data-agregar="${p.id}" data-rec="${rec ? 1 : 0}" aria-label="Agregar ${esc(p.nombre)}">${p.personalizable ? "Elegir" : "Agregar"}</button>`}
+            <div class="controles-prod" data-ctrl="${p.id}" data-rec="${rec ? 1 : 0}">${controlesHTML(p, rec)}</div>
           </div>
         </div>
       </article>`;
@@ -703,6 +798,21 @@
       .sort((a, b) => D.posCategoria(a.categoria) - D.posCategoria(b.categoria));
   }
 
+  const slug = (t) => normalizarTexto(t).replace(/[^a-z0-9]+/g, "-");
+
+  // Tarjetas grandes de categorías (con la foto de un producto representativo)
+  function categoriasHTML(categorias, cuenta) {
+    return `<div class="cat-tiles">${categorias.filter(c => c !== "Todas").map(c => {
+      const dc = D.datosCategoria(c);
+      const portada = dc.portada && producto(dc.portada);
+      return `<button class="cat-tile" data-cat="${esc(c)}" style="--c:${dc.color}" aria-label="${esc(c)}: ${cuenta(c)} productos">
+        ${portada ? fotoHTML(portada, "cat-tile-foto") : `<span class="cat-tile-foto sin-foto" aria-hidden="true">${dc.icono}</span>`}
+        <span class="cat-tile-icono" aria-hidden="true">${dc.icono}</span>
+        <span class="cat-tile-txt"><strong>${esc(c)}</strong><small>${cuenta(c)} productos</small></span>
+      </button>`;
+    }).join("")}</div>`;
+  }
+
   // "Todas" sin búsqueda: el menú se muestra agrupado por categoría
   function productosHTML() {
     const lista = filtrarMenu();
@@ -710,8 +820,9 @@
     if (S.categoria !== "Todas" || S.busqueda.trim()) return `<div class="grid">${lista.map(p => tarjetaProducto(p)).join("")}</div>`;
     return D.ordenarCategorias(lista.map(p => p.categoria)).map(c => {
       const deCat = lista.filter(p => p.categoria === c);
-      return `<section class="grupo-categoria" aria-label="${esc(c)}">
-        <h3 class="cat-titulo"><span aria-hidden="true">${D.iconoCategoria(c)}</span> ${esc(c)} <span class="contador">${deCat.length}</span></h3>
+      const dc = D.datosCategoria(c);
+      return `<section class="grupo-categoria" id="cat-${slug(c)}" data-grupo="${esc(c)}" aria-label="${esc(c)}" style="--c:${dc.color}">
+        <h3 class="cat-titulo"><span class="cat-icono" aria-hidden="true">${dc.icono}</span> ${esc(c)} <span class="contador">${deCat.length}</span></h3>
         <div class="grid">${deCat.map(p => tarjetaProducto(p)).join("")}</div>
       </section>`;
     }).join("");
@@ -762,13 +873,22 @@
           : `<p class="vacio-mini">No hay productos que cumplan todas tus restricciones. Ajusta tu <a href="#/perfil">perfil</a>.</p>`}
       </section>
 
-      <section>
-        <div class="titulo-seccion"><h2>Menú completo</h2></div>
-        <input class="buscador" type="search" placeholder="Buscar café, arepa, postre…" value="${esc(S.busqueda)}" aria-label="Buscar producto">
-        <div class="chips desplazable categorias" role="group" aria-label="Categorías">
-          ${categorias.map(c => `<button class="chip ${S.categoria === c ? "activo" : ""}" data-cat="${esc(c)}" aria-pressed="${S.categoria === c}">
-            <span aria-hidden="true">${c === "Todas" ? "🍽️" : D.iconoCategoria(c)}</span> ${esc(c)} <span class="chip-num">${cuenta(c)}</span></button>`).join("")}
-        </div>
+      <section class="menu-completo">
+        <div class="titulo-seccion"><h2>¿Qué se te antoja?</h2><span class="nota">Toca una categoría</span></div>
+        ${S.categoria === "Todas" && !S.busqueda ? categoriasHTML(categorias, cuenta) : ""}
+        <input class="buscador" type="search" placeholder="🔎 Buscar café, arepa, postre…" value="${esc(S.busqueda)}" aria-label="Buscar producto">
+        <nav class="barra-categorias" aria-label="Categorías del menú">
+          <div class="chips desplazable categorias">
+            ${categorias.map(c => { const dc = D.datosCategoria(c); return `<button class="chip ${S.categoria === c ? "activo" : ""}" data-cat="${esc(c)}" aria-pressed="${S.categoria === c}" style="--c:${c === "Todas" ? "var(--cobre)" : dc.color}">
+              <span class="chip-icono" aria-hidden="true">${c === "Todas" ? "🍽️" : dc.icono}</span> ${esc(c)} <span class="chip-num">${cuenta(c)}</span></button>`; }).join("")}
+          </div>
+        </nav>
+        ${S.categoria !== "Todas" ? (() => { const dc = D.datosCategoria(S.categoria); return `
+          <div class="cat-activa" style="--c:${dc.color}">
+            <span class="cat-icono" aria-hidden="true">${dc.icono}</span>
+            <div><strong>${esc(S.categoria)}</strong><small>${cuenta(S.categoria)} productos</small></div>
+            <button class="btn btn-sm" data-cat="Todas">Ver todo el menú</button>
+          </div>`; })() : ""}
         <div id="grid-productos">${productosHTML()}</div>
       </section>
       ${cantidadCarrito() ? `<a href="#/carrito" class="flotante">🛒 Ver carrito · ${cantidadCarrito()} · ${dinero(totalCarrito())}</a>` : ""}`;
@@ -779,16 +899,32 @@
     }));
     $$("[data-cat]", app).forEach(b => b.addEventListener("click", () => {
       S.categoria = b.dataset.cat;
+      S.busqueda = "";
       vistaMenu();
       // Lleva la vista al inicio del menú y deja visible la categoría elegida
       $(".buscador", app).scrollIntoView({ block: "start" });
       const activa = $(".chips.categorias .chip.activo", app);
       if (activa) activa.scrollIntoView({ block: "nearest", inline: "center" });
     }));
+    // En "Todas", la barra resalta la categoría que se está viendo al desplazarse
+    if (S.observador) S.observador.disconnect();
+    if ("IntersectionObserver" in window && S.categoria === "Todas") {
+      S.observador = new IntersectionObserver((entradas) => {
+        const visible = entradas.filter(e => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (!visible) return;
+        const c = visible.target.dataset.grupo;
+        $$(".chips.categorias .chip", app).forEach(ch => ch.classList.toggle("en-vista", ch.dataset.cat === c));
+        const ch = $(`.chips.categorias .chip.en-vista`, app);
+        if (ch) ch.scrollIntoView({ block: "nearest", inline: "center" });
+      }, { rootMargin: "-130px 0px -60% 0px" });
+      $$(".grupo-categoria", app).forEach(g => S.observador.observe(g));
+    }
     const buscador = $(".buscador", app);
     buscador.addEventListener("input", () => {
       S.busqueda = buscador.value;
       $("#grid-productos").innerHTML = productosHTML();
+      const tiles = $(".cat-tiles", app);
+      if (tiles) tiles.hidden = Boolean(S.busqueda.trim());
     });
     const bh = $("#btn-habitual");
     if (bh) bh.addEventListener("click", () => {
@@ -807,6 +943,11 @@
     }) : [];
     const canalGuardado = S.kiosco ? "kiosco" : (() => { try { return localStorage.getItem("cafe_canal") || "movil"; } catch (e) { return "movil"; } })();
     const m = moodDef(S.mood);
+    // Entrega: se recuerda la última elección (en el kiosco siempre empieza en "barra")
+    if (!S.entrega) {
+      const guardada = S.kiosco ? {} : (() => { try { return JSON.parse(localStorage.getItem("cafe_entrega")) || {}; } catch (e) { return {}; } })();
+      S.entrega = { tipo: guardada.tipo === "mesa" ? "mesa" : "barra", mesa: guardada.mesa || "" };
+    }
 
     app.innerHTML = `
       <section class="encabezado"><h1>Tu pedido</h1></section>
@@ -816,7 +957,7 @@
             <ul class="lineas">
               ${lineas.map(l => `
                 <li class="linea">
-                  <span class="linea-emoji" aria-hidden="true">${esc(l.p.emoji)}</span>
+                  ${fotoHTML(l.p, "linea-foto")}
                   <div class="linea-info">
                     <strong>${esc(l.p.nombre)} ${l.recomendado ? `<span class="rec" title="Agregado desde una recomendación">✨</span>` : ""}</strong>
                     ${l.opciones ? `<small>${esc(D.describirOpciones(l.opciones))}</small>` : ""}
@@ -839,6 +980,22 @@
                 <option value="kiosco" ${canalGuardado === "kiosco" ? "selected" : ""}>🖥️ Kiosco de autoservicio</option>
               </select>
             </label>`}
+            <fieldset class="entrega">
+              <legend>¿Cómo quieres recibirlo?</legend>
+              <div class="segmentos dos">
+                <label class="seg"><input type="radio" name="entrega" value="barra" ${S.entrega.tipo === "barra" ? "checked" : ""}>
+                  <span><strong>🛎️ Recoger en barra</strong><small>Te avisamos cuando esté listo</small></span></label>
+                <label class="seg"><input type="radio" name="entrega" value="mesa" ${S.entrega.tipo === "mesa" ? "checked" : ""}>
+                  <span><strong>🍽️ Llevar a mi mesa</strong><small>Te lo llevamos</small></span></label>
+              </div>
+              <label class="campo campo-mesa" ${S.entrega.tipo === "mesa" ? "" : "hidden"}>Número de mesa
+                <select id="mesa" aria-describedby="e-mesa">
+                  <option value="">Elige tu mesa…</option>
+                  ${Array.from({ length: D.MESAS }, (_, i) => i + 1).map(n => `<option value="${n}" ${Number(S.entrega.mesa) === n ? "selected" : ""}>Mesa ${n}</option>`).join("")}
+                </select>
+                <small class="campo-error" id="e-mesa" hidden>Elige el número de tu mesa (está en la mesa).</small>
+              </label>
+            </fieldset>
             <div class="total"><span>Total</span><strong>${dinero(total)}</strong></div>
             <button class="btn btn-primario btn-bloque" id="btn-pedir">Confirmar pedido</button>
           </aside>
@@ -858,17 +1015,34 @@
     };
     $$("[data-mas]", app).forEach(b => b.addEventListener("click", () => cambiar(b.dataset.mas, 1)));
     $$("[data-menos]", app).forEach(b => b.addEventListener("click", () => cambiar(b.dataset.menos, -1)));
+    $$("input[name=entrega]", app).forEach(r => r.addEventListener("change", () => {
+      S.entrega.tipo = r.value;
+      $(".campo-mesa", app).hidden = r.value !== "mesa";
+      if (r.value === "mesa") $("#mesa", app).focus();
+    }));
+    const selMesa = $("#mesa", app);
+    if (selMesa) selMesa.addEventListener("change", () => { S.entrega.mesa = selMesa.value; $("#e-mesa").hidden = Boolean(selMesa.value); selMesa.removeAttribute("aria-invalid"); });
     const btn = $("#btn-pedir");
     if (btn) btn.addEventListener("click", async () => {
       const canal = S.kiosco ? "kiosco" : $("#canal").value;
-      try { localStorage.setItem("cafe_canal", canal); } catch (e) { /* ignorar */ }
+      const entrega = S.entrega.tipo;
+      const mesa = entrega === "mesa" ? Number(selMesa.value) || null : null;
+      if (entrega === "mesa" && !mesa) {
+        $("#e-mesa").hidden = false; selMesa.setAttribute("aria-invalid", "true"); selMesa.focus();
+        return;
+      }
+      try {
+        localStorage.setItem("cafe_canal", canal);
+        if (!S.kiosco) localStorage.setItem("cafe_entrega", JSON.stringify({ tipo: entrega, mesa: mesa || S.entrega.mesa }));
+      } catch (e) { /* ignorar */ }
       btn.disabled = true; btn.textContent = "Enviando…";
       try {
-        const id = await api.crearPedido(S.carrito, canal, S.mood);
+        const id = await api.crearPedido(S.carrito, canal, S.mood, entrega, mesa);
         S.carrito = []; guardarCarrito();
+        if (S.kiosco) S.entrega = null;
         await cargarDatos();
         pintarNavegacion();
-        confirmarPedido(id, total);
+        confirmarPedido(id, total, entrega, mesa);
       } catch (e) {
         toast(e.message, "error");
         btn.disabled = false; btn.textContent = "Confirmar pedido";
@@ -876,14 +1050,17 @@
     });
   }
 
-  function confirmarPedido(id, total) {
+  function confirmarPedido(id, total, entrega, mesa) {
     const capa = document.createElement("div");
     capa.className = "capa centro";
     capa.innerHTML = `
       <div class="confirmacion" role="alertdialog" aria-labelledby="conf-titulo">
         <div class="check" aria-hidden="true">✓</div>
         <h2 id="conf-titulo">Pedido #${id} confirmado</h2>
-        <p>${dinero(total)} · ${S.kiosco ? "Recógelo en la barra cuando lo llamemos." : "Te avisaremos cuando esté listo."}</p>
+        ${entrega === "mesa"
+          ? `<p class="conf-entrega">🍽️ Te lo llevamos a la <strong>mesa ${mesa}</strong></p>`
+          : `<p class="conf-entrega">🛎️ Recógelo en la <strong>barra</strong></p>`}
+        <p>${dinero(total)} · ${entrega === "mesa" ? "Te avisaremos cuando vaya en camino." : S.kiosco ? "Te llamaremos cuando esté listo." : "Te avisaremos cuando esté listo."}</p>
         ${S.kiosco ? `<p class="ayuda" id="cuenta">Cerrando sesión en 8 s…</p><button class="btn btn-primario btn-bloque" id="conf-ok">Terminar</button>`
           : `<button class="btn btn-primario btn-bloque" id="conf-ok">Ver mis pedidos</button>`}
         <div class="conf-extra">
@@ -920,7 +1097,7 @@
   /* ================= vista: mis pedidos ================= */
   const pildora = (estado) => `<span class="pildora ${estado}">${esc((ESTADOS.find(e => e[0] === estado) || [0, estado])[1])}</span>`;
   const itemsHTML = (items) => `<ul>${items.map(i => `<li>${i.cantidad} × ${esc(i.nombre)}${i.opciones ? ` <small>(${esc(D.describirOpciones(i.opciones))})</small>` : ""}${i.recomendado ? ` <span class="rec" title="Recomendado por el sistema">✨</span>` : ""}</li>`).join("")}</ul>`;
-  const metaPedido = (p) => `${fecha(p.created_at)} · ${p.canal === "kiosco" ? "🖥️ Kiosco" : "📱 Celular"}${p.mood && moodDef(p.mood) ? " · " + moodDef(p.mood).icono + " " + moodDef(p.mood).label : ""}`;
+  const metaPedido = (p) => `${fecha(p.created_at)} · ${p.canal === "kiosco" ? "🖥️ Kiosco" : "📱 Celular"} · ${p.entrega === "mesa" ? "🍽️ Mesa " + p.mesa : "🛎️ Barra"}${p.mood && moodDef(p.mood) ? " · " + moodDef(p.mood).icono + " " + moodDef(p.mood).label : ""}`;
 
   async function vistaPedidos() {
     app.innerHTML = `<section class="encabezado"><h1>Mis pedidos</h1></section><p class="cargando">Cargando…</p>`;
@@ -996,6 +1173,7 @@
         <label class="campo">Nombre <input name="nombre" value="${esc(p.nombre)}" required></label>
         ${formPerfilHTML(p)}
         <p class="ayuda">🔒 Tus datos se usan solo para personalizar tus sugerencias (Ley 1581 de 2012 de protección de datos personales).</p>
+        <p class="ayuda"><a href="#/creditos">📷 Créditos de las fotos del menú</a></p>
         <button class="btn btn-primario" type="submit">Guardar cambios</button>
       </form>`;
 
@@ -1034,6 +1212,7 @@
 
     const tarjetaPedido = (p, conSelector) => `
       <article class="tarjeta pedido ${p.estado} ${S.avisosNuevos.has(p.id) ? "nuevo" : ""}" data-id="${p.id}">
+        <div class="entrega-badge ${p.entrega === "mesa" ? "mesa" : "barra"}">${p.entrega === "mesa" ? `🍽️ Mesa <strong>${p.mesa}</strong>` : "🛎️ Recoger en barra"}</div>
         <header><strong>#${p.id} · ${esc(p.cliente || "Cliente")}</strong>${S.avisosNuevos.has(p.id) ? `<span class="pildora nuevo">Nuevo</span>` : pildora(p.estado)}</header>
         <p class="meta">${haceCuanto(p.created_at)} · ${metaPedido(p)}</p>
         ${itemsHTML(p.items)}
@@ -1045,7 +1224,7 @@
               ? `<select data-estado="${p.id}" aria-label="Estado del pedido ${p.id}">
                   ${ESTADOS.map(([k, t]) => `<option value="${k}" ${p.estado === k ? "selected" : ""}>${t}</option>`).join("")}
                 </select>`
-              : SIGUIENTE[p.estado] ? `<button class="btn btn-primario btn-sm" data-avanzar="${p.id}" data-a="${SIGUIENTE[p.estado][0]}">${SIGUIENTE[p.estado][1]}</button>` : ""}
+              : SIGUIENTE[p.estado] ? `<button class="btn btn-primario btn-sm" data-avanzar="${p.id}" data-a="${SIGUIENTE[p.estado][0]}">${p.estado === "listo" && p.entrega === "mesa" ? "🍽️ Entregado en mesa " + p.mesa : SIGUIENTE[p.estado][1]}</button>` : ""}
           </span>
         </footer>
       </article>`;
@@ -1077,7 +1256,7 @@
           </div>
           <div class="lista-pedidos">${pedidos.map(p => tarjetaPedido(p, true)).join("") || `<p class="vacio-mini">Aún no hay pedidos.</p>`}</div>`;
       }
-      const columnas = [["pendiente", "Pendientes"], ["preparando", "En preparación"], ["listo", "Listos para entregar"]];
+      const columnas = [["pendiente", "Pendientes"], ["preparando", "En preparación"], ["listo", "Listos · llevar a mesa o barra"]];
       return controles + `
         <div class="titulo-seccion">
           <h2>Pedidos en curso</h2>
@@ -1111,7 +1290,7 @@
             <thead><tr><th>Producto</th><th>Precio</th><th>Stock</th><th>Visible</th><th></th></tr></thead>
             <tbody>${catalogo.slice().sort((a, b) => D.posCategoria(a.categoria) - D.posCategoria(b.categoria) || a.categoria.localeCompare(b.categoria, "es") || a.nombre.localeCompare(b.nombre, "es")).map(p => `
               <tr class="${p.stock <= 0 ? "fila-agotada" : p.stock <= 5 ? "fila-baja" : ""}">
-                <td><span aria-hidden="true">${esc(p.emoji)}</span> ${esc(p.nombre)}<small>${D.iconoCategoria(p.categoria)} ${esc(p.categoria)}${p.personalizable ? " · personalizable" : ""}</small></td>
+                <td>${fotoHTML(p, "inv-foto")}${esc(p.nombre)}<small>${D.iconoCategoria(p.categoria)} ${esc(p.categoria)}${p.personalizable ? " · personalizable" : ""}</small></td>
                 <td>${dinero(p.precio)}</td>
                 <td><div class="stock">
                   <button class="btn-redondo" data-stock="${p.id}" data-delta="-1" aria-label="Restar stock">−</button>
@@ -1160,8 +1339,8 @@
       </div>`;
     };
     const exportarCSV = (lista) => {
-      const filas = [["pedido", "fecha", "cliente", "canal", "estado", "mood", "producto", "cantidad", "precio_unitario", "subtotal", "recomendado"]];
-      lista.forEach(p => p.items.forEach(i => filas.push([p.id, new Date(p.created_at).toLocaleString("es-CO"), p.cliente || "", p.canal, p.estado, p.mood || "",
+      const filas = [["pedido", "fecha", "cliente", "canal", "entrega", "mesa", "estado", "mood", "producto", "cantidad", "precio_unitario", "subtotal", "recomendado"]];
+      lista.forEach(p => p.items.forEach(i => filas.push([p.id, new Date(p.created_at).toLocaleString("es-CO"), p.cliente || "", p.canal, p.entrega || "barra", p.mesa || "", p.estado, p.mood || "",
         i.nombre, i.cantidad, i.precio_unitario, i.precio_unitario * i.cantidad, i.recomendado ? "si" : "no"])));
       const csv = "﻿" + filas.map(f => f.map(c => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\n");
       const a = document.createElement("a");
@@ -1242,7 +1421,7 @@
           <div class="stat"><span>Ticket promedio</span><strong>${dinero(ticket)}</strong><small>${unidades} productos vendidos</small></div>
           <div class="stat"><span>Clientes atendidos</span><strong>${clientes}</strong><small>${enCurso} pedidos en curso ahora</small></div>
           <div class="stat destacado"><span>Aceptación de recomendaciones</span><strong>${pct(conRec, lista.length)}</strong><small>Pedidos con al menos un producto sugerido</small></div>
-          <div class="stat"><span>Hora pico</span><strong>${hora[1] ? hora[0] : "—"}</strong><small>Kiosco: ${pct(kiosco, lista.length)} · Mood: ${pct(conMood, lista.length)}</small></div>
+          <div class="stat"><span>Hora pico</span><strong>${hora[1] ? hora[0] : "—"}</strong><small>A la mesa: ${pct(lista.filter(p => p.entrega === "mesa").length, lista.length)} · Kiosco: ${pct(kiosco, lista.length)} · Mood: ${pct(conMood, lista.length)}</small></div>
         </div>
         ${lista.length ? `
         <div class="paneles paneles-2">
