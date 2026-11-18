@@ -4,12 +4,16 @@
   let ctx = null;
 
   // Los navegadores solo permiten sonido después de una interacción del usuario
+  const avisarListo = () => { if (audioListo()) document.dispatchEvent(new Event("audio-listo")); };
   const desbloquear = () => {
     try {
       ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
-      if (ctx.state === "suspended") ctx.resume();
+      if (ctx.state === "suspended") ctx.resume().then(avisarListo, () => {});
+      else avisarListo();
     } catch (e) { /* sin audio */ }
   };
+  // ¿El navegador ya permite reproducir la campana?
+  const audioListo = () => !!ctx && ctx.state === "running";
   ["pointerdown", "keydown"].forEach(ev => document.addEventListener(ev, desbloquear, { passive: true }));
 
   function sonidoActivo() {
@@ -23,6 +27,7 @@
   function sonar() {
     if (!sonidoActivo() || !ctx) return;
     try {
+      if (ctx.state === "suspended") ctx.resume();
       const ahora = ctx.currentTime;
       [[880, 0], [1318.5, 0.16]].forEach(([frecuencia, retraso]) => {
         const osc = ctx.createOscillator();
@@ -85,5 +90,5 @@
     if (duracion) setTimeout(() => tarjeta.remove(), duracion);
   }
 
-  window.avisos = { sonar, notificar, mostrar, permiso, pedirPermiso, sonidoActivo, activarSonido };
+  window.avisos = { sonar, notificar, mostrar, permiso, pedirPermiso, sonidoActivo, activarSonido, audioListo };
 })();
