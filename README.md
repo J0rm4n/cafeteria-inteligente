@@ -68,7 +68,18 @@ Tamaño (8/12/16 oz), tipo de leche (entera, deslactosada, almendras, avena) y e
 
 ☕ Cafés calientes · 🧊 Cafés fríos · 🫖 Bebidas calientes · 🥤 Jugos y bebidas frías · 🍳 Desayunos · 🥐 Panadería · 🥪 Sándwiches y wraps · 🥟 Snacks salados · 🍰 Postres · 🥗 Saludable
 
-En "Todas" el menú se muestra agrupado por categoría; los filtros muestran cuántos productos hay en cada una y la búsqueda ignora tildes. Las categorías nuevas creadas desde el Dashboard aparecen al final.
+- **Categorías destacadas**: tarjetas grandes con foto al inicio del menú, barra fija de categorías con color propio que resalta la categoría visible al desplazarse, y encabezados de color en cada grupo. La búsqueda ignora tildes. Las categorías nuevas creadas desde el Dashboard aparecen al final.
+- **Fotos de los productos**: imágenes libres de [Wikimedia Commons](https://commons.wikimedia.org) (licencias CC0, CC BY y CC BY-SA), definidas en `js/fotos.js` y cargadas desde los servidores de Wikimedia. Los créditos (autor, licencia y enlace) están en la página **Créditos de las fotos** (`#/creditos`). Si una foto no carga, o el producto no tiene foto, se muestra su emoji.
+- **Cantidad desde el menú**: al tocar *Agregar* aparece el selector **− cantidad +** en la misma tarjeta; en las bebidas personalizables se elige la cantidad en la hoja de opciones.
+
+## Entrega en la mesa
+
+Al confirmar el pedido, el cliente elige **🛎️ Recoger en barra** o **🍽️ Llevar a mi mesa** (mesas 1 a 12; se recuerda la última). La mesa se valida en el formulario y otra vez en la base de datos (`crear_pedido`).
+
+- El Dashboard muestra la mesa en cada pedido y, en *Listos*, el botón **🍽️ Entregado en mesa N**.
+- El cliente recibe el aviso "Va en camino a tu mesa N" cuando el pedido está listo.
+- La factura indica la entrega, y las estadísticas y el CSV incluyen la mesa.
+- Para cambiar el número de mesas: `MESAS` en `js/dominio.js` y el límite `between 1 and 12` en `supabase/schema.sql`.
 
 ## Perfil de la cafetería (Dashboard)
 
