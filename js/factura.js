@@ -49,7 +49,8 @@
         <section class="factura-datos">
           <div><span>Cliente</span><strong>${esc(cliente.nombre || "Consumidor final")}</strong>${cliente.email ? `<small>${esc(cliente.email)}</small>` : ""}</div>
           <div><span>Pedido</span><strong>#${pedido.id}</strong><small>${pedido.canal === "kiosco" ? "Kiosco de autoservicio" : "Aplicación móvil"}</small></div>
-          <div><span>Forma de pago</span><strong>En caja al recoger</strong><small>Estado: ${esc(pedido.estado)}</small></div>
+          <div><span>Entrega</span><strong>${pedido.entrega === "mesa" && pedido.mesa ? "🍽️ Mesa " + pedido.mesa : "🛎️ Recoger en barra"}</strong><small>Estado: ${esc(pedido.estado)}</small></div>
+          <div><span>Forma de pago</span><strong>${pedido.entrega === "mesa" ? "Al recibir en la mesa" : "En caja al recoger"}</strong></div>
         </section>
 
         <table class="factura-tabla">
