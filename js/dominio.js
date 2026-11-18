@@ -49,18 +49,27 @@
   /** ¿El producto es apto para estas restricciones?
    *  La lactosa no excluye una bebida personalizable: se sirve con leche vegetal o deslactosada. */
   // Categorías del menú: orden en que se muestran e ícono de cada una
+  //   portada: producto cuya foto representa la categoría · color: acento de la tarjeta
   const CATEGORIAS = [
-    { nombre: "Cafés calientes",       icono: "☕" },
-    { nombre: "Cafés fríos",           icono: "🧊" },
-    { nombre: "Bebidas calientes",     icono: "🫖" },
-    { nombre: "Jugos y bebidas frías", icono: "🥤" },
-    { nombre: "Desayunos",             icono: "🍳" },
-    { nombre: "Panadería",             icono: "🥐" },
-    { nombre: "Sándwiches y wraps",    icono: "🥪" },
-    { nombre: "Snacks salados",        icono: "🥟" },
-    { nombre: "Postres",               icono: "🍰" },
-    { nombre: "Saludable",             icono: "🥗" }
+    { nombre: "Cafés calientes",       icono: "☕", portada: 3,  color: "#c8844d" },
+    { nombre: "Cafés fríos",           icono: "🧊", portada: 29, color: "#6fa8dc" },
+    { nombre: "Bebidas calientes",     icono: "🫖", portada: 6,  color: "#b5654a" },
+    { nombre: "Jugos y bebidas frías", icono: "🥤", portada: 37, color: "#e0708a" },
+    { nombre: "Desayunos",             icono: "🍳", portada: 40, color: "#e2b04a" },
+    { nombre: "Panadería",             icono: "🥐", portada: 13, color: "#d9a066" },
+    { nombre: "Sándwiches y wraps",    icono: "🥪", portada: 45, color: "#9bbf6a" },
+    { nombre: "Snacks salados",        icono: "🥟", portada: 21, color: "#e08a4a" },
+    { nombre: "Postres",               icono: "🍰", portada: 50, color: "#c98bd6" },
+    { nombre: "Saludable",             icono: "🥗", portada: 23, color: "#6cc59a" }
   ];
+  const datosCategoria = (n) => CATEGORIAS.find(c => c.nombre === n) || { nombre: n, icono: "🏷️", portada: null, color: "#d98b4a" };
+
+  // Fotos de los productos (js/fotos.js); los productos sin foto muestran su emoji
+  const fotoProducto = (p) => p && window.fotos ? window.fotos.url(p.id) : null;
+
+  // Entrega en la mesa
+  const MESAS = 12;
+  const textoEntrega = (pedido) => pedido.entrega === "mesa" && pedido.mesa ? "Mesa " + pedido.mesa : "Recoger en barra";
   const posCategoria = (n) => { const i = CATEGORIAS.findIndex(c => c.nombre === n); return i < 0 ? 99 : i; };
   const iconoCategoria = (n) => (CATEGORIAS.find(c => c.nombre === n) || { icono: "🏷️" }).icono;
   // Ordena nombres de categoría según CATEGORIAS; las creadas desde el Dashboard van al final en orden alfabético
@@ -181,6 +190,7 @@
 
   window.dominio = {
     INTOLERANCIAS, GUSTOS, MOODS, OPCIONES, MOMENTOS, CATEGORIAS, iconoCategoria, ordenarCategorias, posCategoria,
+    datosCategoria, fotoProducto, MESAS, textoEntrega,
     esCompatible, lechesPermitidas, permiteExtra, precioUnitario, describirOpciones, claveLinea,
     validarEmail, reglasClave, validarClave, fuerzaClave, validarNombre, nombreDesdeCorreo
   };
