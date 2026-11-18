@@ -85,11 +85,37 @@
       }));
     }
     S.desuscribir.push(api.suscribirMisPedidos(S.sesion.user.id, alCambioMiPedido));
+    // Respaldo: si la conexión en vivo se cae (pestaña en segundo plano, red móvil),
+    // una consulta periódica detecta lo que faltó y avisa igual (sin repetir avisos)
+    const revisar = async () => {
+      try {
+        if (esAdmin()) {
+          const todos = await api.todosLosPedidos();
+          if (!S.pedidosVistos) { S.pedidosVistos = new Set(todos.map(p => p.id)); return; }
+          todos.filter(p => !S.pedidosVistos.has(p.id) && p.estado === "pendiente").reverse().forEach(alNuevoPedido);
+          todos.forEach(p => S.pedidosVistos.add(p.id));
+        } else if (Object.values(S.estadosMios).some(e => e !== "entregado" && e !== "cancelado")) {
+          const mios = await api.misPedidos(S.sesion.user.id);
+          S.misPedidos = mios;
+          mios.forEach(p => alCambioMiPedido({ id: p.id, estado: p.estado }));
+        }
+      } catch (e) { /* se reintenta en la próxima vuelta */ }
+    };
+    S.pedidosVistos = null;
+    revisar();
+    const intervalo = setInterval(revisar, 20000);
+    const alVolver = () => { if (document.visibilityState === "visible") revisar(); };
+    document.addEventListener("visibilitychange", alVolver);
+    S.desuscribir.push(() => { clearInterval(intervalo); document.removeEventListener("visibilitychange", alVolver); });
   }
 
   // La cafetería recibe un pedido nuevo
   function alNuevoPedido(p) {
     if (!p) return;
+    if (S.pedidosVistos) {
+      if (S.pedidosVistos.has(p.id)) return;   // ya se avisó (tiempo real + respaldo)
+      S.pedidosVistos.add(p.id);
+    }
     S.avisosNuevos.add(p.id);
     actualizarContadorAvisos();
     avisos.sonar();
@@ -117,8 +143,11 @@
     const [titulo, cuerpo] = textos[estado] || ["Pedido #" + id, "Nuevo estado: " + estado];
     if (estado === "listo") { avisos.sonar(); avisos.notificar(titulo, cuerpo, "mi-pedido-" + id); }
     avisos.mostrar({ titulo, cuerpo, tipo: estado === "listo" ? "listo" : "info" });
-    if (rutaActual() === "pedidos") vistaPedidos();
+    if (rutaActual() === "pedidos") { clearInterval(S.temporizador); vistaPedidos(); }
   }
+
+  // Al primer toque el navegador habilita el audio: se quita el aviso y suena la campana como confirmación
+  document.addEventListener("audio-listo", () => { const b = document.querySelector("[data-activar-audio]"); if (b) { b.remove(); setTimeout(avisos.sonar, 120); } });
 
   function actualizarContadorAvisos() {
     const n = S.avisosNuevos.size;
@@ -1234,7 +1263,9 @@
             <button class="btn btn-sm" data-sonido aria-pressed="${avisos.sonidoActivo()}">${avisos.sonidoActivo() ? "🔊 Sonido activado" : "🔇 Sonido apagado"}</button>
             <button class="btn btn-sm" data-probar>Probar sonido</button>
           </span>
-        </div>`;
+        </div>
+        ${avisos.sonidoActivo() && !avisos.audioListo() ? `
+          <button class="activar-campana" data-activar-audio>🔔 <strong>Toca aquí para activar la campana</strong><small>El navegador no deja sonar avisos hasta que toques la página una vez.</small></button>` : ""}`;
       if (S.filtroAdmin === "todos") {
         return controles + `
           <div class="titulo-seccion">
