@@ -68,8 +68,8 @@ Tamaño (8/12/16 oz), tipo de leche (entera, deslactosada, almendras, avena) y e
 
 ☕ Cafés calientes · 🧊 Cafés fríos · 🫖 Bebidas calientes · 🥤 Jugos y bebidas frías · 🍳 Desayunos · 🥐 Panadería · 🥪 Sándwiches y wraps · 🥟 Snacks salados · 🍰 Postres · 🥗 Saludable
 
-- **Categorías destacadas**: tarjetas grandes con foto al inicio del menú, barra fija de categorías con color propio que resalta la categoría visible al desplazarse, y encabezados de color en cada grupo. La búsqueda ignora tildes. Las categorías nuevas creadas desde el Dashboard aparecen al final.
-- **Fotos de los productos**: imágenes libres de [Wikimedia Commons](https://commons.wikimedia.org) (licencias CC0, CC BY y CC BY-SA), definidas en `js/fotos.js` y cargadas desde los servidores de Wikimedia. Los créditos (autor, licencia y enlace) están en la página **Créditos de las fotos** (`#/creditos`). Si una foto no carga, o el producto no tiene foto, se muestra su emoji.
+- **Categorías**: barra fija y discreta con una miniatura de foto por categoría, que resalta la categoría visible al desplazarse; cada grupo tiene un encabezado sencillo con su número de productos. La búsqueda ignora tildes. Las categorías nuevas creadas desde el Dashboard aparecen al final.
+- **Fotos de los productos**: miniaturas cuadradas dentro de cada tarjeta, con imágenes libres de [Wikimedia Commons](https://commons.wikimedia.org) (licencias CC0, CC BY y CC BY-SA), definidas en `js/fotos.js` y cargadas desde los servidores de Wikimedia. Los créditos (autor, licencia y enlace) están en la página **Créditos de las fotos** (`#/creditos`). Si una foto no carga, o el producto no tiene foto, se muestra su emoji.
 - **Cantidad desde el menú**: al tocar *Agregar* aparece el selector **− cantidad +** en la misma tarjeta; en las bebidas personalizables se elige la cantidad en la hoja de opciones.
 
 ## Entrega en la mesa
