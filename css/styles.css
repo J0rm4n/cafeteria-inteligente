@@ -550,9 +550,7 @@ body.kiosco .btn-redondo { min-width: 46px; height: 46px; }
 .chip.activo .chip-num { background: rgba(0,0,0,.18); color: inherit; }
 .grupo-categoria { margin-top: 22px; scroll-margin-top: 80px; }
 .grupo-categoria:first-child { margin-top: 6px; }
-.cat-titulo { display: flex; align-items: center; gap: 8px; font-size: 1.05rem; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--borde); }
 .cat-titulo .contador { margin-left: auto; }
-.chips.categorias { position: sticky; top: 58px; z-index: 15; background: var(--fondo); padding: 8px 0 10px; margin-bottom: 4px; }
 .buscador { scroll-margin-top: 70px; }
 
 /* ---------- logo (se muestra tal cual, sin recortes ni filtros) ---------- */
@@ -560,3 +558,92 @@ body.kiosco .btn-redondo { min-width: 46px; height: 46px; }
 .login-logo { display: block; width: 120px; height: auto; margin-bottom: 14px; }
 @media (min-width: 900px) { .login-logo { width: 150px; } }
 .factura-marca img { width: 56px; height: auto; flex-shrink: 0; }
+
+/* ---------- fotos de productos ---------- */
+.producto-img { position: relative; height: 150px; padding: 0; overflow: hidden; font-size: 3rem; }
+.producto-img .foto { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .3s ease; }
+.producto:hover .producto-img .foto { transform: scale(1.04); }
+.producto-img .sin-foto { display: grid; place-items: center; width: 100%; height: 100%; }
+.producto-emoji { position: absolute; left: 8px; bottom: 8px; width: 30px; height: 30px; display: grid; place-items: center; font-size: 1rem; border-radius: 50%; background: rgba(22,17,14,.78); }
+.producto-img .sin-foto ~ .producto-emoji { display: none; }
+@media (max-width: 559px) {
+  .grid .producto-img { width: 112px; flex: 0 0 112px; height: auto; min-height: 112px; }
+  .grid .producto-emoji { display: none; }
+}
+body.kiosco .producto-img { height: 170px; }
+.hoja-foto { width: 72px; height: 72px; flex: 0 0 72px; border-radius: 16px; object-fit: cover; border: 1px solid var(--borde); background: var(--fondo-2); }
+.hoja-foto.sin-foto { display: grid; place-items: center; font-size: 2.4rem; }
+.linea-foto { width: 52px; height: 52px; flex: 0 0 52px; border-radius: 12px; object-fit: cover; border: 1px solid var(--borde); background: var(--fondo-2); }
+.linea-foto.sin-foto { display: grid; place-items: center; font-size: 1.7rem; }
+.inv-foto { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; vertical-align: middle; margin-right: 8px; }
+.inv-foto.sin-foto { display: inline-grid; place-items: center; font-size: 1.4rem; }
+
+/* ---------- cantidad desde la tarjeta ---------- */
+.controles-prod { display: flex; align-items: center; gap: 8px; }
+.stepper { display: inline-flex; align-items: center; gap: 4px; padding: 3px; border-radius: 999px; background: var(--cobre-suave); border: 1px solid var(--cobre); }
+.stepper .btn-redondo { width: 34px; min-width: 34px; height: 34px; padding: 0; border-radius: 50%; background: var(--cobre); border-color: var(--cobre); color: #1a0f07; font-weight: 700; font-size: 1.15rem; }
+.stepper .btn-redondo:disabled { opacity: .4; cursor: not-allowed; }
+.stepper output { min-width: 26px; text-align: center; font-weight: 700; font-size: 1.05rem; }
+.stepper.grande .btn-redondo { width: 42px; min-width: 42px; height: 42px; }
+.stepper.grande output { min-width: 34px; font-size: 1.2rem; }
+.en-pedido { font-size: .75rem; color: var(--cobre-claro); font-weight: 600; white-space: nowrap; }
+.hoja-cantidad { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 6px 0 12px; font-weight: 600; }
+
+/* ---------- categorías destacadas ---------- */
+.cat-tiles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 16px; }
+@media (min-width: 600px) { .cat-tiles { grid-template-columns: repeat(3, 1fr); } }
+@media (min-width: 900px) { .cat-tiles { grid-template-columns: repeat(5, 1fr); } }
+.cat-tile {
+  position: relative; display: block; height: 108px; padding: 0; overflow: hidden; cursor: pointer; text-align: left;
+  border-radius: 16px; border: 2px solid color-mix(in srgb, var(--c) 55%, transparent); background: var(--fondo-2); color: #fff; font: inherit;
+  box-shadow: var(--sombra); transition: transform .15s ease, border-color .15s ease;
+}
+.cat-tile:hover, .cat-tile:focus-visible { transform: translateY(-2px); border-color: var(--c); }
+.cat-tile-foto { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cat-tile-foto.sin-foto { display: grid; place-items: center; font-size: 3rem; }
+.cat-tile::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.05) 20%, rgba(12,8,6,.88) 100%); }
+.cat-tile-txt { position: absolute; z-index: 1; left: 10px; right: 10px; bottom: 8px; display: flex; flex-direction: column; line-height: 1.15; }
+.cat-tile-txt strong { font-family: var(--titulos); font-size: 1rem; text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+.cat-tile-txt small { font-size: .75rem; color: rgba(255,255,255,.85); }
+.cat-tile-icono { position: absolute; z-index: 1; top: 8px; left: 8px; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: var(--c); font-size: 1.15rem; box-shadow: 0 2px 8px rgba(0,0,0,.4); }
+
+.barra-categorias { position: sticky; top: 58px; z-index: 15; margin: 0 -16px 8px; padding: 8px 16px 10px; background: rgba(22,17,14,.96); backdrop-filter: blur(6px); border-bottom: 1px solid var(--borde); }
+.barra-categorias .chip { min-height: 44px; padding: 8px 16px; font-size: .95rem; font-weight: 600; border-width: 2px; }
+.barra-categorias .chip-icono { font-size: 1.2rem; }
+.barra-categorias .chip.activo { background: var(--c); border-color: var(--c); color: #1a0f07; }
+.barra-categorias .chip.en-vista:not(.activo) { border-color: var(--c); background: color-mix(in srgb, var(--c) 18%, var(--tarjeta)); }
+
+.cat-titulo {
+  display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 10px 14px; font-size: 1.15rem;
+  border-radius: 14px; border-left: 5px solid var(--c); background: linear-gradient(90deg, color-mix(in srgb, var(--c) 22%, var(--tarjeta)), var(--tarjeta) 75%);
+}
+.cat-icono { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; background: var(--c); font-size: 1.2rem; flex: 0 0 36px; }
+.cat-activa {
+  display: flex; align-items: center; gap: 12px; margin: 4px 0 14px; padding: 12px 14px; border-radius: 14px;
+  border-left: 5px solid var(--c); background: linear-gradient(90deg, color-mix(in srgb, var(--c) 22%, var(--tarjeta)), var(--tarjeta) 80%);
+}
+.cat-activa div { flex: 1; display: flex; flex-direction: column; }
+.cat-activa strong { font-family: var(--titulos); font-size: 1.15rem; }
+.cat-activa small { color: var(--suave); }
+
+/* ---------- entrega en la mesa ---------- */
+.entrega { border: 0; padding: 0; margin: 0 0 12px; min-width: 0; }
+.entrega legend { font-weight: 600; margin-bottom: 8px; }
+.segmentos.dos { grid-template-columns: 1fr 1fr; }
+.entrega .seg strong { font-size: .92rem; }
+.campo-mesa { margin-top: 10px; }
+.campo-mesa select[aria-invalid=true] { border-color: var(--error); }
+.conf-entrega { font-size: 1.1rem; color: var(--texto) !important; margin: 4px 0; }
+.entrega-badge { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px; padding: 4px 12px; border-radius: 999px; font-size: .85rem; font-weight: 600; }
+.entrega-badge.mesa { background: var(--azul); color: #0e1621; font-size: .95rem; }
+.entrega-badge.mesa strong { font-size: 1.15rem; }
+.entrega-badge.barra { background: var(--tarjeta-2); border: 1px solid var(--borde); color: var(--suave); }
+
+/* ---------- créditos de las fotos ---------- */
+.creditos-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+@media (min-width: 900px) { .creditos-lista { grid-template-columns: 1fr 1fr; } }
+.creditos-lista li { display: flex; gap: 12px; align-items: center; padding: 10px; border: 1px solid var(--borde); border-radius: 12px; background: var(--tarjeta); }
+.creditos-lista img { width: 64px; height: 48px; object-fit: cover; border-radius: 8px; flex: 0 0 64px; }
+.creditos-lista div { display: flex; flex-direction: column; min-width: 0; }
+.creditos-lista small { color: var(--suave); overflow-wrap: anywhere; }
+.creditos a { color: var(--cobre-claro); }
