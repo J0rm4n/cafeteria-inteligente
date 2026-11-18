@@ -773,7 +773,7 @@
       .map(a => D.INTOLERANCIAS.find(i => i.id === a)?.corto).filter(Boolean);
     return `
       <article class="producto ${agotado ? "agotado" : ""}">
-        <div class="producto-img">${fotoHTML(p, "foto")}<span class="producto-emoji" aria-hidden="true">${esc(p.emoji || "")}</span></div>
+        <div class="producto-img">${fotoHTML(p, "foto")}</div>
         <div class="producto-cuerpo">
           ${motivo ? `<p class="motivo">✨ ${esc(motivo)}</p>` : ""}
           <h3>${esc(p.nombre)}</h3>
@@ -800,17 +800,12 @@
 
   const slug = (t) => normalizarTexto(t).replace(/[^a-z0-9]+/g, "-");
 
-  // Tarjetas grandes de categorías (con la foto de un producto representativo)
-  function categoriasHTML(categorias, cuenta) {
-    return `<div class="cat-tiles">${categorias.filter(c => c !== "Todas").map(c => {
-      const dc = D.datosCategoria(c);
-      const portada = dc.portada && producto(dc.portada);
-      return `<button class="cat-tile" data-cat="${esc(c)}" style="--c:${dc.color}" aria-label="${esc(c)}: ${cuenta(c)} productos">
-        ${portada ? fotoHTML(portada, "cat-tile-foto") : `<span class="cat-tile-foto sin-foto" aria-hidden="true">${dc.icono}</span>`}
-        <span class="cat-tile-icono" aria-hidden="true">${dc.icono}</span>
-        <span class="cat-tile-txt"><strong>${esc(c)}</strong><small>${cuenta(c)} productos</small></span>
-      </button>`;
-    }).join("")}</div>`;
+  // Miniatura redonda de la categoría (foto de un producto representativo)
+  function miniCategoria(c) {
+    if (c === "Todas") return `<span class="chip-foto sin-foto" aria-hidden="true">🍽️</span>`;
+    const dc = D.datosCategoria(c);
+    const portada = dc.portada && producto(dc.portada);
+    return portada ? fotoHTML(portada, "chip-foto") : `<span class="chip-foto sin-foto" aria-hidden="true">${dc.icono}</span>`;
   }
 
   // "Todas" sin búsqueda: el menú se muestra agrupado por categoría
@@ -822,7 +817,7 @@
       const deCat = lista.filter(p => p.categoria === c);
       const dc = D.datosCategoria(c);
       return `<section class="grupo-categoria" id="cat-${slug(c)}" data-grupo="${esc(c)}" aria-label="${esc(c)}" style="--c:${dc.color}">
-        <h3 class="cat-titulo"><span class="cat-icono" aria-hidden="true">${dc.icono}</span> ${esc(c)} <span class="contador">${deCat.length}</span></h3>
+        <h3 class="cat-titulo"><span class="cat-punto" aria-hidden="true"></span>${esc(c)} <span class="contador">${deCat.length} productos</span></h3>
         <div class="grid">${deCat.map(p => tarjetaProducto(p)).join("")}</div>
       </section>`;
     }).join("");
@@ -874,20 +869,18 @@
       </section>
 
       <section class="menu-completo">
-        <div class="titulo-seccion"><h2>¿Qué se te antoja?</h2><span class="nota">Toca una categoría</span></div>
-        ${S.categoria === "Todas" && !S.busqueda ? categoriasHTML(categorias, cuenta) : ""}
+        <div class="titulo-seccion"><h2>¿Qué se te antoja?</h2></div>
         <input class="buscador" type="search" placeholder="🔎 Buscar café, arepa, postre…" value="${esc(S.busqueda)}" aria-label="Buscar producto">
         <nav class="barra-categorias" aria-label="Categorías del menú">
           <div class="chips desplazable categorias">
-            ${categorias.map(c => { const dc = D.datosCategoria(c); return `<button class="chip ${S.categoria === c ? "activo" : ""}" data-cat="${esc(c)}" aria-pressed="${S.categoria === c}" style="--c:${c === "Todas" ? "var(--cobre)" : dc.color}">
-              <span class="chip-icono" aria-hidden="true">${c === "Todas" ? "🍽️" : dc.icono}</span> ${esc(c)} <span class="chip-num">${cuenta(c)}</span></button>`; }).join("")}
+            ${categorias.map(c => `<button class="chip ${S.categoria === c ? "activo" : ""}" data-cat="${esc(c)}" aria-pressed="${S.categoria === c}">
+              ${miniCategoria(c)}<span>${esc(c)}</span></button>`).join("")}
           </div>
         </nav>
         ${S.categoria !== "Todas" ? (() => { const dc = D.datosCategoria(S.categoria); return `
           <div class="cat-activa" style="--c:${dc.color}">
-            <span class="cat-icono" aria-hidden="true">${dc.icono}</span>
-            <div><strong>${esc(S.categoria)}</strong><small>${cuenta(S.categoria)} productos</small></div>
-            <button class="btn btn-sm" data-cat="Todas">Ver todo el menú</button>
+            <h3 class="cat-titulo"><span class="cat-punto" aria-hidden="true"></span>${esc(S.categoria)} <span class="contador">${cuenta(S.categoria)} productos</span></h3>
+            <button class="enlace-todo" data-cat="Todas">Ver todo el menú</button>
           </div>`; })() : ""}
         <div id="grid-productos">${productosHTML()}</div>
       </section>
@@ -923,8 +916,6 @@
     buscador.addEventListener("input", () => {
       S.busqueda = buscador.value;
       $("#grid-productos").innerHTML = productosHTML();
-      const tiles = $(".cat-tiles", app);
-      if (tiles) tiles.hidden = Boolean(S.busqueda.trim());
     });
     const bh = $("#btn-habitual");
     if (bh) bh.addEventListener("click", () => {
