@@ -3,7 +3,7 @@
 //   - DemoAPI:     simulación en localStorage (para presentar sin configurar nada)
 //
 // Perfil:  { id, nombre, restricciones[], preferencias[], perfil_completo, rol }
-// Pedido:  { id, usuario_id, cliente, canal, estado, mood, total, created_at,
+// Pedido:  { id, usuario_id, cliente, canal, estado, mood, total, created_at, entrega ("barra" | "mesa"), mesa,
 //            items: [{ producto_id, nombre, cantidad, opciones, precio_unitario, recomendado }] }
 
 (function () {
@@ -35,6 +35,8 @@
       canal: p.canal,
       estado: p.estado,
       mood: p.mood,
+      entrega: p.entrega || "barra",
+      mesa: p.mesa || null,
       total: p.total,
       created_at: p.created_at,
       items: (p.pedido_items || []).map(it => ({
@@ -113,9 +115,10 @@
         if (id) ok(await db.from("productos").update(datos).eq("id", id));
         else ok(await db.from("productos").insert(datos));
       },
-      async crearPedido(lineas, canal, mood) {
+      async crearPedido(lineas, canal, mood, entrega = "barra", mesa = null) {
         const p_items = lineas.map(l => ({ producto_id: l.producto_id, cantidad: l.cantidad, opciones: l.opciones, recomendado: Boolean(l.recomendado) }));
-        return ok(await db.rpc("crear_pedido", { p_items, p_canal: canal, p_mood: mood || null }));
+        return ok(await db.rpc("crear_pedido", { p_items, p_canal: canal, p_mood: mood || null,
+          p_entrega: entrega, p_mesa: entrega === "mesa" ? mesa : null }));
       },
       async misPedidos(usuarioId) {
         const data = ok(await db.from("pedidos").select("*, " + ITEMS)
@@ -243,9 +246,10 @@
         else estado.productos.push({ ...p, id: Math.max(...estado.productos.map(x => x.id)) + 1 });
         guardar();
       },
-      async crearPedido(lineas, canal, mood) {
+      async crearPedido(lineas, canal, mood, entrega = "barra", mesa = null) {
         await espera();
         const u = actual();
+        if (entrega === "mesa" && !(Number.isInteger(mesa) && mesa >= 1 && mesa <= D.MESAS)) throw new Error("Elige un número de mesa entre 1 y " + D.MESAS + ".");
         const items = lineas.map(l => {
           const p = estado.productos.find(x => x.id === l.producto_id);
           if (!p || !p.disponible) throw new Error("Un producto ya no está disponible.");
@@ -258,6 +262,7 @@
         const pedido = {
           id: Math.max(0, ...estado.pedidos.map(p => p.id)) + 1,
           usuario_id: u.id, cliente: u.nombre, canal, mood: mood || null, estado: "pendiente",
+          entrega: entrega === "mesa" ? "mesa" : "barra", mesa: entrega === "mesa" ? mesa : null,
           total: items.reduce((s, l) => s + l.precio_unitario * l.cantidad, 0),
           created_at: new Date().toISOString(), items
         };
